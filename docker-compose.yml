@@ -1,0 +1,201 @@
+x-app-environment: &app-environment
+  NODE_ENV: production
+  MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+  MYSQL_USER: ${MYSQL_USER}
+  MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+  RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+  RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+  AUTH_SERVER_PORT: 3000
+  CONTROL_PANEL_PORT: 3001
+  APP_A_PORT: 4001
+  APP_B_PORT: 4002
+  SYNC_WORKER_PORT: 5000
+  AUTH_DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/auth_db
+  APP_A_DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/app_a_db
+  APP_B_DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/app_b_db
+  RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672
+
+x-app-dependencies: &app-dependencies
+  mysql:
+    condition: service_healthy
+  rabbitmq:
+    condition: service_healthy
+  migrate:
+    condition: service_completed_successfully
+
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: auth_db
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - '3308:3306'
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD} --silent',
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:4.3-management
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+    ports:
+      - '5672:5672'
+      - '15672:15672'
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: .
+      args:
+        APP_NAME: auth-server
+    environment: *app-environment
+    command: ['pnpm', 'run', 'db:migrate:deploy']
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: 'no'
+
+  auth-server:
+    build:
+      context: .
+      args:
+        APP_NAME: auth-server
+    environment: *app-environment
+    command: ["node", "dist/apps/auth-server/main.js"]
+    ports:
+      - '3000:3000'
+    depends_on: *app-dependencies
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  control-panel:
+    build:
+      context: .
+      args:
+        APP_NAME: control-panel
+    environment: *app-environment
+    command: ["node", "dist/apps/control-panel/main.js"]
+    ports:
+      - '3001:3001'
+    depends_on: *app-dependencies
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3001/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  app-a:
+    build:
+      context: .
+      args:
+        APP_NAME: app-a
+    environment: *app-environment
+    command: ["node", "dist/apps/app-a/main.js"]
+    ports:
+      - '4001:4001'
+    depends_on: *app-dependencies
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:4001/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  app-b:
+    build:
+      context: .
+      args:
+        APP_NAME: app-b
+    environment: *app-environment
+    command: ["node", "dist/apps/app-b/main.js"]
+    ports:
+      - '4002:4002'
+    depends_on: *app-dependencies
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:4002/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  sync-worker:
+    build:
+      context: .
+      args:
+        APP_NAME: sync-worker
+    environment: *app-environment
+    command: ["node", "dist/apps/sync-worker/main.js"]
+    ports:
+      - '5000:5000'
+    depends_on: *app-dependencies
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:5000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+  rabbitmq_data:

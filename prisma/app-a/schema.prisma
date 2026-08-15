@@ -1,0 +1,67 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../generated/prisma/app-a"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("APP_A_DATABASE_URL")
+}
+
+enum LocalSessionStatus {
+  ACTIVE  @map("active")
+  EXPIRED @map("expired")
+  REVOKED @map("revoked")
+}
+
+model LocalSession {
+  id               String             @id @default(uuid()) @db.Char(36)
+  sessionTokenHash String             @unique @map("session_token_hash") @db.Char(64)
+  externalUserId   String             @map("external_user_id") @db.Char(36)
+  centralSessionId String             @map("central_session_id") @db.Char(36)
+  status           LocalSessionStatus @default(ACTIVE)
+  createdAt        DateTime           @default(now()) @map("created_at") @db.DateTime(3)
+  expiresAt        DateTime           @map("expires_at") @db.DateTime(3)
+  lastActivityAt   DateTime?          @map("last_activity_at") @db.DateTime(3)
+  revokedAt        DateTime?          @map("revoked_at") @db.DateTime(3)
+  revokeReason     String?            @map("revoke_reason") @db.VarChar(191)
+
+  @@index([externalUserId, status])
+  @@index([centralSessionId])
+  @@index([expiresAt])
+  @@map("local_sessions")
+}
+
+model ProfileCache {
+  externalUserId String   @id @map("external_user_id") @db.Char(36)
+  name           String   @db.VarChar(191)
+  email          String   @db.VarChar(191)
+  groups         Json?
+  syncedAt       DateTime @map("synced_at") @db.DateTime(3)
+  createdAt      DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  @@map("profile_cache")
+}
+
+model ProcessedEvent {
+  eventId     String   @id @map("event_id") @db.Char(36)
+  eventType   String   @map("event_type") @db.VarChar(191)
+  processedAt DateTime @default(now()) @map("processed_at") @db.DateTime(3)
+  result      String   @db.VarChar(191)
+
+  @@map("processed_events")
+}
+
+model ActivityLog {
+  id            String   @id @default(uuid()) @db.Char(36)
+  eventType     String   @map("event_type") @db.VarChar(191)
+  message       String   @db.Text
+  correlationId String?  @map("correlation_id") @db.Char(36)
+  metadata      Json?
+  createdAt     DateTime @default(now()) @map("created_at") @db.DateTime(3)
+
+  @@index([createdAt])
+  @@index([correlationId])
+  @@map("activity_logs")
+}
