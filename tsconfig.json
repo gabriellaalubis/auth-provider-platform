@@ -22,6 +22,12 @@
     "strictBindCallApply": true,
     "noFallthroughCasesInSwitch": true,
     "paths": {
+      "@app/auth-database": [
+        "libs/auth-database/src"
+      ],
+      "@app/auth-database/*": [
+        "libs/auth-database/src/*"
+      ],
       "@app/config": [
         "libs/config/src"
       ],

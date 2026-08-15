@@ -28,6 +28,15 @@
         "tsConfigPath": "apps/app-b/tsconfig.app.json"
       }
     },
+    "auth-database": {
+      "type": "library",
+      "root": "libs/auth-database",
+      "entryFile": "index",
+      "sourceRoot": "libs/auth-database/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/auth-database/tsconfig.lib.json"
+      }
+    },
     "auth-server": {
       "type": "application",
       "root": "apps/auth-server",

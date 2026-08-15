@@ -1,9 +1,19 @@
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import { ValidationPipe } from '@nestjs/common';
 import { ControlPanelModule } from './control-panel.module';
+import { StandardExceptionFilter } from '@app/shared';
 
 async function bootstrap() {
   const app = await NestFactory.create(ControlPanelModule);
+  app.useGlobalPipes(
+    new ValidationPipe({
+      transform: true,
+      whitelist: true,
+      forbidNonWhitelisted: true,
+    }),
+  );
+  app.useGlobalFilters(new StandardExceptionFilter());
   const configService = app.get(ConfigService);
   const port = configService.getOrThrow<number>('CONTROL_PANEL_PORT');
 
