@@ -4,10 +4,16 @@ import { PlatformConfigModule } from '@app/config';
 import { RequestIdMiddleware } from '@app/shared';
 import { ControlPanelController } from './control-panel.controller';
 import { ControlPanelService } from './control-panel.service';
-import { SecurityModule } from 'libs/security/src';
+import { SecurityModule } from '@app/security';
+import { UsersModule } from './users/users.module';
 
 @Module({
-  imports: [PlatformConfigModule, AuthDatabaseModule, SecurityModule],
+  imports: [
+    PlatformConfigModule,
+    AuthDatabaseModule,
+    SecurityModule,
+    UsersModule,
+  ],
   controllers: [ControlPanelController],
   providers: [ControlPanelService],
 })

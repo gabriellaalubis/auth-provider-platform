@@ -24,7 +24,8 @@
     "db:format": "prisma format --schema prisma/auth/schema.prisma && prisma format --schema prisma/app-a/schema.prisma && prisma format --schema prisma/app-b/schema.prisma",
     "db:validate": "prisma validate --schema prisma/auth/schema.prisma && prisma validate --schema prisma/app-a/schema.prisma && prisma validate --schema prisma/app-b/schema.prisma",
     "db:generate": "prisma generate --schema prisma/auth/schema.prisma && prisma generate --schema prisma/app-a/schema.prisma && prisma generate --schema prisma/app-b/schema.prisma",
-    "db:migrate:deploy": "prisma migrate deploy --schema prisma/auth/schema.prisma && prisma migrate deploy --schema prisma/app-a/schema.prisma && prisma migrate deploy --schema prisma/app-b/schema.prisma"
+    "db:migrate:deploy": "prisma migrate deploy --schema prisma/auth/schema.prisma && prisma migrate deploy --schema prisma/app-a/schema.prisma && prisma migrate deploy --schema prisma/app-b/schema.prisma",
+    "db:seed": "tsx prisma/auth/seed.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
@@ -35,6 +36,7 @@
     "argon2": "^0.45.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
+    "cookie-parser": "^1.4.7",
     "joi": "^18.2.3",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1"
@@ -45,6 +47,7 @@
     "@nestjs/cli": "^11.0.0",
     "@nestjs/schematics": "^11.0.0",
     "@nestjs/testing": "^11.0.1",
+    "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^24.0.0",
@@ -62,6 +65,7 @@
     "ts-loader": "^9.5.2",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
+    "tsx": "^4.23.12",
     "typescript": "^5.7.3",
     "typescript-eslint": "^8.20.0"
   },
@@ -72,7 +76,7 @@
       "ts"
     ],
     "rootDir": ".",
-    "testRegex": ".*\\.spec\\.ts$",
+    "testRegex": "^(?!.*\\.e2e-spec\\.ts$).*\\.spec\\.ts$",
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
     },
@@ -89,13 +93,16 @@
       "^@app/auth-database(|/.*)$": "<rootDir>/libs/auth-database/src/$1",
       "^@app/config(|/.*)$": "<rootDir>/libs/config/src/$1",
       "^@app/contracts(|/.*)$": "<rootDir>/libs/contracts/src/$1",
-      "^@app/shared(|/.*)$": "<rootDir>/libs/shared/src/$1"
+      "^@app/shared(|/.*)$": "<rootDir>/libs/shared/src/$1",
+      "^@app/security(|/.*)$": "<rootDir>/libs/security/src/$1"
     }
   },
   "pnpm": {
     "onlyBuiltDependencies": [
       "@prisma/client",
       "@prisma/engines",
+      "argon2",
+      "esbuild",
       "prisma"
     ]
   }

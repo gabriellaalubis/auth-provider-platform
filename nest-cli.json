@@ -82,6 +82,15 @@
         "tsConfigPath": "libs/shared/tsconfig.lib.json"
       }
     },
+    "security": {
+      "type": "library",
+      "root": "libs/security",
+      "entryFile": "index",
+      "sourceRoot": "libs/security/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/security/tsconfig.lib.json"
+      }
+    },
     "sync-worker": {
       "type": "application",
       "root": "apps/sync-worker",

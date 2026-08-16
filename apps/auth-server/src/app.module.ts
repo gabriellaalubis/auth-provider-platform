@@ -4,10 +4,16 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthDatabaseModule } from '@app/auth-database';
 import { RequestIdMiddleware } from '@app/shared';
-import { SecurityModule } from 'libs/security/src';
+import { SecurityModule } from '@app/security';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
-  imports: [PlatformConfigModule, AuthDatabaseModule, SecurityModule],
+  imports: [
+    PlatformConfigModule,
+    AuthDatabaseModule,
+    SecurityModule,
+    AuthModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })

@@ -20,22 +20,23 @@ RabbitMQ.
 docker compose up --build
 ```
 
-Service `migrate` otomatis menerapkan seluruh migration sebelum aplikasi
-dimulai. Build pertama memerlukan waktu lebih lama untuk mengunduh image dan
-dependency; build selanjutnya menggunakan cache Docker.
+Service `migrate` otomatis menerapkan seluruh migration dan seed user
+development sebelum aplikasi dimulai. Build pertama memerlukan waktu lebih lama
+untuk mengunduh image dan dependency; build selanjutnya menggunakan cache
+Docker.
 
 ## URL development
 
-| Komponen | URL/port |
-| --- | --- |
-| Auth Server | http://localhost:3000 |
-| Control Panel | http://localhost:3001 |
-| App A | http://localhost:4001 |
-| App B | http://localhost:4002 |
-| Sync Worker health | http://localhost:5000/health |
-| MySQL Docker dari Windows | `127.0.0.1:3308` |
-| RabbitMQ AMQP | `localhost:5672` |
-| RabbitMQ Management | http://localhost:15672 |
+| Komponen                  | URL/port                     |
+| ------------------------- | ---------------------------- |
+| Auth Server               | http://localhost:3000        |
+| Control Panel             | http://localhost:3001        |
+| App A                     | http://localhost:4001        |
+| App B                     | http://localhost:4002        |
+| Sync Worker health        | http://localhost:5000/health |
+| MySQL Docker dari Windows | `127.0.0.1:3308`             |
+| RabbitMQ AMQP             | `localhost:5672`             |
+| RabbitMQ Management       | http://localhost:15672       |
 
 MySQL lokal pemilik repository memakai port 3307, sehingga MySQL Docker proyek
 dipetakan ke port host 3308. Di jaringan Docker, aplikasi tetap mengakses
@@ -57,8 +58,10 @@ apps/
   app-b/
   sync-worker/
 libs/
+  auth-database/
   config/
   contracts/
+  security/
   shared/
 prisma/
   auth/
@@ -86,6 +89,8 @@ pnpm run build:all
 pnpm run db:validate
 pnpm run db:generate
 pnpm run db:migrate:deploy
+pnpm run db:seed
+pnpm run test:e2e:all
 ```
 
 Menjalankan satu aplikasi secara lokal:
@@ -103,11 +108,31 @@ tersebut.
 - `.env` tidak boleh di-commit.
 - `.env.example` hanya berisi nama variabel dan referensi antarvariabel.
 - Source code tidak menyimpan password, client secret, atau token.
+- Password disimpan sebagai Argon2id hash.
+- Central session memakai opaque token pada cookie `HttpOnly`; database hanya
+  menyimpan SHA-256 hash token.
 - Aplikasi menggunakan user MySQL `platform`; user `root` hanya untuk
   administrasi lokal.
 
+## Endpoint Hari 2
+
+| Method  | Endpoint                                   | Fungsi                   |
+| ------- | ------------------------------------------ | ------------------------ |
+| `POST`  | `http://localhost:3001/users`              | Membuat user             |
+| `GET`   | `http://localhost:3001/users`              | Melihat daftar user      |
+| `GET`   | `http://localhost:3001/users/:id`          | Melihat detail user      |
+| `PATCH` | `http://localhost:3001/users/:id`          | Mengubah nama/email      |
+| `PATCH` | `http://localhost:3001/users/:id/status`   | Mengubah status user     |
+| `PATCH` | `http://localhost:3001/users/:id/password` | Mengubah password        |
+| `POST`  | `http://localhost:3000/auth/login`         | Membuat central session  |
+| `GET`   | `http://localhost:3000/auth/session`       | Membaca central session  |
+| `POST`  | `http://localhost:3000/auth/logout`        | Mencabut central session |
+
 ## Status implementasi
 
-Fondasi Hari 1 sudah tersedia: monorepo, validasi konfigurasi, Docker Compose,
-schema dan migration awal, serta health endpoint. Authentication, OAuth, policy,
-dan event processing ditambahkan pada tahap berikutnya.
+Hari 1–2 sudah tersedia: monorepo, validasi konfigurasi, Docker Compose, schema,
+migration, seed idempotent, health endpoint, pengelolaan user, Argon2id password
+hashing, audit log, login, central session cookie, pemeriksaan session, logout,
+dan pencabutan session ketika user dinonaktifkan atau password berubah. OAuth,
+group policy, relying application flow, dan event processing dikerjakan pada
+tahap berikutnya.

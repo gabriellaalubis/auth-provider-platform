@@ -18,6 +18,10 @@ export const environmentValidationSchema = Joi.object({
   APP_B_PORT: Joi.number().port().default(4002),
   SYNC_WORKER_PORT: Joi.number().port().default(5000),
 
+  SESSION_COOKIE_NAME: Joi.string().min(1).default('central_session'),
+  SESSION_TTL_SECONDS: Joi.number().integer().positive().default(28800),
+  SESSION_COOKIE_SECURE: Joi.boolean().default(false),
+
   AUTH_DATABASE_URL: Joi.string()
     .uri({ scheme: ['mysql'] })
     .required(),

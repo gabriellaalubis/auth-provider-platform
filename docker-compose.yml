@@ -10,6 +10,9 @@ x-app-environment: &app-environment
   APP_A_PORT: 4001
   APP_B_PORT: 4002
   SYNC_WORKER_PORT: 5000
+  SESSION_COOKIE_NAME: ${SESSION_COOKIE_NAME:-central_session}
+  SESSION_TTL_SECONDS: ${SESSION_TTL_SECONDS:-28800}
+  SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
   AUTH_DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/auth_db
   APP_A_DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/app_a_db
   APP_B_DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/app_b_db
@@ -74,8 +77,12 @@ services:
       context: .
       args:
         APP_NAME: auth-server
-    environment: *app-environment
-    command: ['pnpm', 'run', 'db:migrate:deploy']
+    environment:
+      <<: *app-environment
+      SEED_ADMIN_NAME: ${SEED_ADMIN_NAME}
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD}
+    command: ['sh', '-c', 'pnpm run db:migrate:deploy && pnpm run db:seed']
     depends_on:
       mysql:
         condition: service_healthy
