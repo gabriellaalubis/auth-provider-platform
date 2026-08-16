@@ -1,5 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import { AuthPrismaService } from '@app/auth-database';
+import { TokenService } from '@app/security';
 import { SessionService } from './session.service';
 
 const USER = {
@@ -45,14 +46,21 @@ describe('SessionService', () => {
   const configService = {
     getOrThrow: jest.fn().mockReturnValue(28800),
   };
+  const tokenService = {
+    generateOpaqueToken: jest.fn(),
+    hash: jest.fn(),
+  };
   let service: SessionService;
 
   beforeEach(() => {
     jest.clearAllMocks();
     configService.getOrThrow.mockReturnValue(28800);
+    tokenService.generateOpaqueToken.mockReturnValue('raw-session-token');
+    tokenService.hash.mockReturnValue('a'.repeat(64));
     service = new SessionService(
       authPrisma as unknown as AuthPrismaService,
       configService as unknown as ConfigService,
+      tokenService as unknown as TokenService,
     );
   });
 
@@ -67,6 +75,7 @@ describe('SessionService', () => {
     transaction.auditLog.create.mockResolvedValue({ id: 'audit-id' });
 
     const result = await service.create(USER);
+    expect(tokenService.hash).toHaveBeenCalledWith('raw-session-token');
     expect(result.token).not.toBe(storedHash);
     expect(storedHash).toHaveLength(64);
     expect(result.auth.user).toEqual(USER);

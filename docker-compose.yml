@@ -84,6 +84,8 @@ services:
       SEED_ADMIN_NAME: ${SEED_ADMIN_NAME}
       SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL}
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD}
+      SEED_APP_A_CLIENT_SECRET: ${SEED_APP_A_CLIENT_SECRET}
+      SEED_APP_B_CLIENT_SECRET: ${SEED_APP_B_CLIENT_SECRET}
     command: ['sh', '-c', 'pnpm run db:migrate:deploy && pnpm run db:seed']
     depends_on:
       mysql:
