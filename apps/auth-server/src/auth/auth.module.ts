@@ -6,5 +6,6 @@ import { SessionService } from './session.service';
 @Module({
   controllers: [AuthController],
   providers: [AuthService, SessionService],
+  exports: [SessionService],
 })
 export class AuthModule {}

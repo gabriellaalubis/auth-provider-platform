@@ -6,6 +6,7 @@ import { AuthDatabaseModule } from '@app/auth-database';
 import { RequestIdMiddleware } from '@app/shared';
 import { SecurityModule } from '@app/security';
 import { AuthModule } from './auth/auth.module';
+import { OAuthModule } from './oauth/oauth.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { AuthModule } from './auth/auth.module';
     AuthDatabaseModule,
     SecurityModule,
     AuthModule,
+    OAuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],

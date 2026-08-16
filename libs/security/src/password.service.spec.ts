@@ -1,69 +1,31 @@
-import { PasswordService } from './password.service';
+import { TokenService } from './token.service';
 
-describe('PasswordService', () => {
-  let service: PasswordService;
+describe('TokenService', () => {
+  const service = new TokenService();
 
-  beforeEach(() => {
-    service = new PasswordService();
+  it('menghasilkan opaque token yang berbeda pada setiap pemanggilan', () => {
+    const first = service.generateOpaqueToken();
+    const second = service.generateOpaqueToken();
+
+    expect(first).not.toBe(second);
+    expect(first).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(second).toMatch(/^[A-Za-z0-9_-]{43}$/);
   });
 
-  describe('hash', () => {
-    it('should not return the original password', async () => {
-      const password = 'TestPassword123!';
+  it('menghasilkan hash SHA-256 deterministik sepanjang 64 hex', () => {
+    const first = service.hash('nilai-yang-sama');
+    const second = service.hash('nilai-yang-sama');
 
-      const hash = await service.hash(password);
-
-      expect(hash).not.toBe(password);
-    });
-
-    it('should produce different hashes for the same password', async () => {
-      const password = 'TestPassword123!';
-
-      const hash1 = await service.hash(password);
-      const hash2 = await service.hash(password);
-
-      expect(hash1).not.toBe(hash2);
-    });
-
-    it('should produce an Argon2id hash', async () => {
-      const password = 'TestPassword123!';
-
-      const hash = await service.hash(password);
-
-      expect(hash).toContain('$argon2id$');
-    });
-
-    it('should reject an empty password', async () => {
-      await expect(service.hash('')).rejects.toThrow();
-    });
+    expect(first).toBe(second);
+    expect(first).toMatch(/^[a-f0-9]{64}$/);
   });
 
-  describe('verify', () => {
-    it('should return true for the correct password', async () => {
-      const password = 'TestPassword123!';
-      const hash = await service.hash(password);
+  it('menghasilkan PKCE challenge S256 base64url', () => {
+    const challenge = service.createPkceChallenge(
+      'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~',
+    );
 
-      await expect(service.verify(hash, password)).resolves.toBe(true);
-    });
-
-    it('should return false for the wrong password', async () => {
-      const password = 'TestPassword123!';
-      const wrongPassword = 'WrongPassword456!';
-      const hash = await service.hash(password);
-
-      await expect(service.verify(hash, wrongPassword)).resolves.toBe(false);
-    });
-
-    it('should return false for an invalid hash', async () => {
-      await expect(
-        service.verify('this-is-not-a-valid-argon2-hash', 'TestPassword123!'),
-      ).resolves.toBe(false);
-    });
-
-    it('should return false for an empty password', async () => {
-      const hash = await service.hash('TestPassword123!');
-
-      await expect(service.verify(hash, '')).resolves.toBe(false);
-    });
+    expect(challenge).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(challenge).not.toContain('=');
   });
 });

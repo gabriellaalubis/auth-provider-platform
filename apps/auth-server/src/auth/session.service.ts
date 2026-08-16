@@ -10,7 +10,7 @@ import type {
   CentralSessionResponse,
   UserResponse,
 } from '@app/contracts';
-import { createHash, randomBytes } from 'node:crypto';
+import { TokenService } from '@app/security';
 
 interface CreatedSession {
   token: string;
@@ -32,11 +32,12 @@ export class SessionService {
   constructor(
     private readonly authPrisma: AuthPrismaService,
     private readonly configService: ConfigService,
+    private readonly tokenService: TokenService,
   ) {}
 
   async create(user: UserResponse): Promise<CreatedSession> {
-    const token = randomBytes(32).toString('base64url');
-    const sessionTokenHash = this.hashToken(token);
+    const token = this.tokenService.generateOpaqueToken();
+    const sessionTokenHash = this.tokenService.hash(token);
     const ttlSeconds = this.configService.getOrThrow<number>(
       'SESSION_TTL_SECONDS',
     );
@@ -74,7 +75,7 @@ export class SessionService {
 
   async getValidSession(token: string): Promise<AuthResponse | null> {
     const session = await this.authPrisma.centralSession.findUnique({
-      where: { sessionTokenHash: this.hashToken(token) },
+      where: { sessionTokenHash: this.tokenService.hash(token) },
       include: { user: { select: USER_SELECT } },
     });
 
@@ -108,7 +109,7 @@ export class SessionService {
   }
 
   async revoke(token: string): Promise<void> {
-    const sessionTokenHash = this.hashToken(token);
+    const sessionTokenHash = this.tokenService.hash(token);
     const session = await this.authPrisma.centralSession.findUnique({
       where: { sessionTokenHash },
     });
@@ -139,10 +140,6 @@ export class SessionService {
         });
       }
     });
-  }
-
-  private hashToken(token: string): string {
-    return createHash('sha256').update(token).digest('hex');
   }
 
   private toSessionResponse(session: {
