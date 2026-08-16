@@ -34,4 +34,15 @@ export const environmentValidationSchema = Joi.object({
   RABBITMQ_URL: Joi.string()
     .uri({ scheme: ['amqp', 'amqps'] })
     .required(),
+
+  AUTHORIZATION_CODE_TTL_SECONDS: Joi.number()
+    .integer()
+    .min(60)
+    .max(600)
+    .default(300),
+  ACCESS_TOKEN_TTL_SECONDS: Joi.number()
+    .integer()
+    .min(300)
+    .max(3600)
+    .default(900),
 });

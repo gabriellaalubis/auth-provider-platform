@@ -17,6 +17,8 @@ x-app-environment: &app-environment
   APP_A_DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/app_a_db
   APP_B_DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/app_b_db
   RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672
+  AUTHORIZATION_CODE_TTL_SECONDS: ${AUTHORIZATION_CODE_TTL_SECONDS:-300}
+  ACCESS_TOKEN_TTL_SECONDS: ${ACCESS_TOKEN_TTL_SECONDS:-900}
 
 x-app-dependencies: &app-dependencies
   mysql:
