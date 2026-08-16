@@ -50,19 +50,23 @@ describe('PolicyEvaluatorService', () => {
 
     await service.evaluate(userId, clientId, redirectUri);
 
-    expect(authPrisma.application.findUnique).toHaveBeenCalledWith(
-      expect.objectContaining({
-        include: expect.objectContaining({
-          redirectUris: expect.objectContaining({
-            where: {
-              redirectUriHash:
-                '736a9a6df5339e06e3b078b98d982eb44423d196c6515566c10b9872f45947c3',
-              redirectUri,
-            },
-          }),
-        }),
-      }),
-    );
+    expect(authPrisma.application.findUnique).toHaveBeenCalledWith({
+      where: { clientId },
+      include: {
+        redirectUris: {
+          where: {
+            redirectUriHash:
+              '736a9a6df5339e06e3b078b98d982eb44423d196c6515566c10b9872f45947c3',
+            redirectUri,
+          },
+          select: { id: true },
+        },
+        groups: {
+          where: { group: { users: { some: { userId } } } },
+          select: { groupId: true },
+        },
+      },
+    });
   });
 
   it.each([
@@ -85,10 +89,13 @@ describe('PolicyEvaluatorService', () => {
       service.evaluate(userId, clientId, redirectUri),
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect(authPrisma.auditLog.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
+      data: {
         eventType: 'POLICY_DENIED',
+        userId,
+        applicationId,
         result: 'failed',
-      }),
+        metadata: { clientId },
+      },
     });
   });
 

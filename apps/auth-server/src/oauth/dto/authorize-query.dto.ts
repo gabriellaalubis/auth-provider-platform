@@ -9,6 +9,10 @@ import {
   MaxLength,
 } from 'class-validator';
 
+function normalizeChallengeMethod(value: unknown): unknown {
+  return typeof value === 'string' ? value.toUpperCase() : value;
+}
+
 export class AuthorizeQueryDto {
   @IsIn(['code'])
   response_type!: 'code';
@@ -31,9 +35,7 @@ export class AuthorizeQueryDto {
   @Matches(/^[A-Za-z0-9_-]+$/)
   code_challenge!: string;
 
-  @Transform(({ value }) =>
-    typeof value === 'string' ? value.toUpperCase() : value,
-  )
+  @Transform(({ value }) => normalizeChallengeMethod(value))
   @IsIn(['S256'])
   code_challenge_method!: 'S256';
 }

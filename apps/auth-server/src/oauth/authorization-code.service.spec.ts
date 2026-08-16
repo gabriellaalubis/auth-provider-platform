@@ -54,10 +54,10 @@ describe('AuthorizationCodeService', () => {
 
   it('mengevaluasi policy lalu menyimpan hash code dan seluruh binding', async () => {
     const before = Date.now();
-    let storedExpiresAt: Date | undefined;
+    let storedCodeData: Record<string, unknown> | undefined;
     transaction.authorizationCode.create.mockImplementation(
-      ({ data }: { data: { expiresAt: Date } }) => {
-        storedExpiresAt = data.expiresAt;
+      ({ data }: { data: Record<string, unknown> }) => {
+        storedCodeData = data;
         return Promise.resolve({});
       },
     );
@@ -77,29 +77,24 @@ describe('AuthorizationCodeService', () => {
       'app-a',
       redirectUri,
     );
-    expect(transaction.authorizationCode.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        codeHash: 'code-hash',
-        userId,
-        applicationId,
-        centralSessionId,
-        redirectUri,
-        codeChallenge: 'challenge-value',
-        codeChallengeMethod: 'S256',
-      }),
+    expect(storedCodeData).toMatchObject({
+      codeHash: 'code-hash',
+      userId,
+      applicationId,
+      centralSessionId,
+      redirectUri,
+      codeChallenge: 'challenge-value',
+      codeChallengeMethod: 'S256',
     });
-    expect(storedExpiresAt).toBeDefined();
-    if (!storedExpiresAt) {
+    const expiresAt = storedCodeData?.expiresAt;
+    expect(expiresAt).toBeInstanceOf(Date);
+    if (!(expiresAt instanceof Date)) {
       throw new Error('expiresAt tidak tersimpan');
     }
-    expect(storedExpiresAt.getTime()).toBeGreaterThanOrEqual(before + 300_000);
-    expect(storedExpiresAt.getTime()).toBeLessThanOrEqual(after + 300_000);
+    expect(expiresAt.getTime()).toBeGreaterThanOrEqual(before + 300_000);
+    expect(expiresAt.getTime()).toBeLessThanOrEqual(after + 300_000);
     expect(result.code).toBe('raw-code');
-    expect(transaction.authorizationCode.create).not.toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ code: 'raw-code' }),
-      }),
-    );
+    expect(storedCodeData).not.toHaveProperty('code');
   });
 
   it('membuat audit code issuance dalam transaction yang sama', async () => {

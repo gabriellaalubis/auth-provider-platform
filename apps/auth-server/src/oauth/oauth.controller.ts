@@ -1,7 +1,11 @@
 import {
+  Body,
   Controller,
   Get,
+  Headers,
+  HttpCode,
   HttpStatus,
+  Post,
   Query,
   Req,
   Res,
@@ -11,7 +15,11 @@ import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
 import { SessionService } from '../auth/session.service';
 import { AuthorizationCodeService } from './authorization-code.service';
+import { extractBearerToken } from './bearer-token';
 import { AuthorizeQueryDto } from './dto/authorize-query.dto';
+import { TokenRequestDto } from './dto/token-request.dto';
+import { TokenExchangeService } from './token-exchange.service';
+import { UserInfoService } from './userinfo.service';
 
 @Controller('oauth')
 export class OAuthController {
@@ -19,6 +27,8 @@ export class OAuthController {
     private readonly configService: ConfigService,
     private readonly sessionService: SessionService,
     private readonly authorizationCodeService: AuthorizationCodeService,
+    private readonly tokenExchangeService: TokenExchangeService,
+    private readonly userInfoService: UserInfoService,
   ) {}
 
   @Get('authorize')
@@ -50,6 +60,18 @@ export class OAuthController {
     redirectUrl.searchParams.set('code', issued.code);
     redirectUrl.searchParams.set('state', issued.state);
     response.redirect(HttpStatus.FOUND, redirectUrl.toString());
+  }
+
+  @Post('token')
+  @HttpCode(HttpStatus.OK)
+  exchange(@Body() dto: TokenRequestDto) {
+    return this.tokenExchangeService.exchange(dto);
+  }
+
+  @Get('userinfo')
+  userinfo(@Headers('authorization') authorization: string | undefined) {
+    const token = extractBearerToken(authorization);
+    return this.userInfoService.getProfile(token);
   }
 
   private readCentralSessionToken(request: Request): string | undefined {
