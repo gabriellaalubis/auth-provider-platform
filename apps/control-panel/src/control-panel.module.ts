@@ -6,6 +6,7 @@ import { ControlPanelController } from './control-panel.controller';
 import { ControlPanelService } from './control-panel.service';
 import { SecurityModule } from '@app/security';
 import { UsersModule } from './users/users.module';
+import { GroupsModule } from './groups/groups.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { UsersModule } from './users/users.module';
     AuthDatabaseModule,
     SecurityModule,
     UsersModule,
+    GroupsModule,
   ],
   controllers: [ControlPanelController],
   providers: [ControlPanelService],
