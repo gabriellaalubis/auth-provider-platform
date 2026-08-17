@@ -65,3 +65,15 @@ model ActivityLog {
   @@index([correlationId])
   @@map("activity_logs")
 }
+
+model OAuthLoginAttempt {
+  id           String    @id @default(uuid()) @db.Char(36)
+  stateHash    String    @unique @map("state_hash") @db.Char(64)
+  codeVerifier String    @map("code_verifier") @db.VarChar(128)
+  expiresAt    DateTime  @map("expires_at") @db.DateTime(3)
+  usedAt       DateTime? @map("used_at") @db.DateTime(3)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+
+  @@index([expiresAt])
+  @@map("oauth_login_attempts")
+}

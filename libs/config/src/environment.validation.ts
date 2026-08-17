@@ -34,7 +34,6 @@ export const environmentValidationSchema = Joi.object({
   RABBITMQ_URL: Joi.string()
     .uri({ scheme: ['amqp', 'amqps'] })
     .required(),
-
   AUTHORIZATION_CODE_TTL_SECONDS: Joi.number()
     .integer()
     .min(60)
@@ -45,4 +44,17 @@ export const environmentValidationSchema = Joi.object({
     .min(300)
     .max(3600)
     .default(900),
+  AUTH_SERVER_PUBLIC_URL: Joi.string().uri({ scheme: ['http', 'https'] }).required(),
+  AUTH_SERVER_INTERNAL_URL: Joi.string().uri({ scheme: ['http', 'https'] }).required(),
+  APP_A_CLIENT_ID: Joi.string().min(1).required(),
+  APP_A_CLIENT_SECRET: Joi.string().min(24).max(128).required(),
+  APP_A_REDIRECT_URI: Joi.string().uri({ scheme: ['http', 'https'] }).required(),
+  APP_A_LOCAL_SESSION_COOKIE_NAME: Joi.string().min(1).required(),
+  APP_B_CLIENT_ID: Joi.string().min(1).required(),
+  APP_B_CLIENT_SECRET: Joi.string().min(24).max(128).required(),
+  APP_B_REDIRECT_URI: Joi.string().uri({ scheme: ['http', 'https'] }).required(),
+  APP_B_LOCAL_SESSION_COOKIE_NAME: Joi.string().min(1).required(),
+  LOCAL_SESSION_TTL_SECONDS: Joi.number().integer().min(300).default(28800),
+  OAUTH_LOGIN_ATTEMPT_TTL_SECONDS: Joi.number().integer().min(60).max(600).default(300),
 });
+
