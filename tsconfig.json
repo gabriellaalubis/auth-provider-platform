@@ -51,6 +51,18 @@
       ],
       "@app/security/*": [
         "libs/security/src/*"
+      ],
+      "@app/app-a-database": [
+        "libs/app-a-database/src"
+      ],
+      "@app/app-a-database/*": [
+        "libs/app-a-database/src/*"
+      ],
+      "@app/app-b-database": [
+        "libs/app-b-database/src"
+      ],
+      "@app/app-b-database/*": [
+        "libs/app-b-database/src/*"
       ]
     }
   }
