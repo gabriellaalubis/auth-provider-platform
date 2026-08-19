@@ -31,6 +31,8 @@ describe('SessionService', () => {
       updateMany: jest.fn(),
     },
     auditLog: { create: jest.fn() },
+    accessToken: { updateMany: jest.fn() },
+    event: { create: jest.fn() },
   };
   const authPrisma = {
     $transaction: jest.fn(
@@ -42,6 +44,7 @@ describe('SessionService', () => {
       findUnique: jest.fn(),
       updateMany: jest.fn(),
     },
+    accessToken: { findMany: jest.fn() },
   };
   const configService = {
     getOrThrow: jest.fn().mockReturnValue(28800),
@@ -57,6 +60,7 @@ describe('SessionService', () => {
     configService.getOrThrow.mockReturnValue(28800);
     tokenService.generateOpaqueToken.mockReturnValue('raw-session-token');
     tokenService.hash.mockReturnValue('a'.repeat(64));
+    authPrisma.accessToken.findMany.mockResolvedValue([]);
     service = new SessionService(
       authPrisma as unknown as AuthPrismaService,
       configService as unknown as ConfigService,

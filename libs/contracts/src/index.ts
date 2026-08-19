@@ -6,3 +6,4 @@ export * from './auth-response';
 export * from './group-response';
 export * from './application-response';
 export * from './oauth-response';
+export * from './platform-event';

@@ -21,6 +21,7 @@ describe('Day 4 SSO runtime', () => {
   let userId = '';
   let appAFlow: StartedFlow | undefined;
   let appBFlow: StartedFlow | undefined;
+  let globalLogoutEventId = '';
 
   beforeAll(async () => {
     await Promise.all([
@@ -75,6 +76,14 @@ describe('Day 4 SSO runtime', () => {
       await appBPrisma.activityLog.deleteMany({
         where: { createdAt: { gte: startedAt } },
       });
+      if (globalLogoutEventId) {
+        await appAPrisma.processedEvent.deleteMany({
+          where: { eventId: globalLogoutEventId },
+        });
+        await appBPrisma.processedEvent.deleteMany({
+          where: { eventId: globalLogoutEventId },
+        });
+      }
       await authPrisma.authorizationCode.deleteMany({ where: { userId } });
       await authPrisma.accessToken.deleteMany({ where: { userId } });
       await authPrisma.centralSession.deleteMany({ where: { userId } });
@@ -151,8 +160,57 @@ describe('Day 4 SSO runtime', () => {
     expect(oldAppA.status).toBe(401);
     expect(activeAppB.status).toBe(200);
     expect(activeCentral.status).toBe(200);
+
+    const globalLogout = await fetch('http://auth-server:3000/auth/logout', {
+      method: 'POST',
+      headers: { cookie: centralCookie },
+    });
+    expect(globalLogout.status).toBe(204);
+
+    await waitUntil(async () => {
+      const response = await fetch('http://app-b:4002/api/session', {
+        headers: { cookie: appBFlow?.localCookie ?? '' },
+      });
+      return response.status === 401;
+    });
+
+    const event = await authPrisma.event.findFirst({
+      where: { userId, eventType: 'SessionRevoked' },
+      orderBy: { createdAt: 'desc' },
+      include: { deliveries: true },
+    });
+    expect(event).not.toBeNull();
+    if (!event) throw new Error('Global logout event is missing');
+    globalLogoutEventId = event.id;
+    await waitUntil(async () => {
+      const deliveries = await authPrisma.eventDelivery.findMany({
+        where: { eventId: event.id },
+      });
+      return (
+        deliveries.length === 2 &&
+        deliveries.every((delivery) => delivery.status === 'SUCCEEDED')
+      );
+    });
+    const [appAProcessed, appBProcessed] = await Promise.all([
+      appAPrisma.processedEvent.findUnique({ where: { eventId: event.id } }),
+      appBPrisma.processedEvent.findUnique({ where: { eventId: event.id } }),
+    ]);
+    expect(appAProcessed).not.toBeNull();
+    expect(appBProcessed).not.toBeNull();
   });
 });
+
+async function waitUntil(
+  condition: () => Promise<boolean>,
+  timeoutMs = 15000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await condition()) return;
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  throw new Error('Timed out while waiting for asynchronous event processing');
+}
 
 async function loginToApplication(
   baseUrl: string,

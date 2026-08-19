@@ -8,15 +8,22 @@ describe('SyncWorkerController', () => {
   beforeEach(async () => {
     const app: TestingModule = await Test.createTestingModule({
       controllers: [SyncWorkerController],
-      providers: [SyncWorkerService],
+      providers: [
+        {
+          provide: SyncWorkerService,
+          useValue: {
+            getHello: jest.fn().mockReturnValue('Sync Worker is running'),
+          },
+        },
+      ],
     }).compile();
 
     syncWorkerController = app.get<SyncWorkerController>(SyncWorkerController);
   });
 
   describe('root', () => {
-    it('should return "Hello World!"', () => {
-      expect(syncWorkerController.getHello()).toBe('Hello World!');
+    it('should return the worker status', () => {
+      expect(syncWorkerController.getHello()).toBe('Sync Worker is running');
     });
   });
 });

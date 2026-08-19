@@ -28,6 +28,8 @@ describe('GroupsService', () => {
       create: jest.fn(),
       delete: jest.fn(),
     },
+    applicationGroup: { findFirst: jest.fn() },
+    event: { create: jest.fn() },
     auditLog: {
       create: jest.fn(),
     },
@@ -44,6 +46,7 @@ describe('GroupsService', () => {
     userGroup: {
       findUnique: jest.fn(),
     },
+    applicationGroup: { findMany: jest.fn() },
   };
   let service: GroupsService;
 
@@ -54,6 +57,7 @@ describe('GroupsService', () => {
         callback: (transaction: typeof transactionMock) => Promise<unknown>,
       ) => callback(transactionMock),
     );
+    authPrismaMock.applicationGroup.findMany.mockResolvedValue([]);
     service = new GroupsService(authPrismaMock as unknown as AuthPrismaService);
   });
 

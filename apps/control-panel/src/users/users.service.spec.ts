@@ -18,6 +18,7 @@ describe('UsersService', () => {
     user: { create: jest.fn(), update: jest.fn() },
     centralSession: { updateMany: jest.fn() },
     auditLog: { create: jest.fn() },
+    event: { create: jest.fn() },
   };
   const authPrisma = {
     $transaction: jest.fn(
@@ -26,12 +27,14 @@ describe('UsersService', () => {
       ): Promise<unknown> => callback(transaction),
     ),
     user: { findMany: jest.fn(), findUnique: jest.fn() },
+    application: { findMany: jest.fn() },
   };
   const passwordService = { hash: jest.fn() };
   let service: UsersService;
 
   beforeEach(() => {
     jest.clearAllMocks();
+    authPrisma.application.findMany.mockResolvedValue([]);
     service = new UsersService(
       authPrisma as unknown as AuthPrismaService,
       passwordService as unknown as PasswordService,

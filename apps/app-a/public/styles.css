@@ -18,6 +18,11 @@
   --blue-dark: #116631;
 }
 
+.theme-a {
+  --blue: #c2410c;
+  --blue-dark: #9a3412;
+}
+
 * {
   box-sizing: border-box;
 }

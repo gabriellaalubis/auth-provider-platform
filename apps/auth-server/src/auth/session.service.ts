@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   AuthPrismaService,
+  AccessTokenStatus,
   SessionStatus,
   UserStatus,
 } from '@app/auth-database';
@@ -118,6 +119,12 @@ export class SessionService {
       return;
     }
 
+    const targets = await this.authPrisma.accessToken.findMany({
+      where: { centralSessionId: session.id },
+      select: { applicationId: true },
+      distinct: ['applicationId'],
+    });
+
     const revokedAt = new Date();
     await this.authPrisma.$transaction(async (transaction) => {
       const result = await transaction.centralSession.updateMany({
@@ -130,6 +137,10 @@ export class SessionService {
       });
 
       if (result.count > 0) {
+        await transaction.accessToken.updateMany({
+          where: { centralSessionId: session.id },
+          data: { status: AccessTokenStatus.REVOKED, revokedAt },
+        });
         await transaction.auditLog.create({
           data: {
             eventType: 'LOGOUT',
@@ -138,6 +149,24 @@ export class SessionService {
             result: 'success',
           },
         });
+        if (targets.length > 0) {
+          await transaction.event.create({
+            data: {
+              eventType: 'SessionRevoked',
+              userId: session.userId,
+              centralSessionId: session.id,
+              payload: {
+                reason: 'sso_logout',
+                metadata: {},
+              },
+              deliveries: {
+                create: targets.map((target) => ({
+                  applicationId: target.applicationId,
+                })),
+              },
+            },
+          });
+        }
       }
     });
   }

@@ -120,6 +120,10 @@ export class UsersService {
   ): Promise<UserResponse> {
     const status =
       dto.status === 'ACTIVE' ? UserStatus.ACTIVE : UserStatus.INACTIVE;
+    const targets =
+      status === UserStatus.INACTIVE
+        ? await this.findUserApplicationTargets(id)
+        : [];
 
     try {
       return await this.authPrisma.$transaction(async (transaction) => {
@@ -138,6 +142,18 @@ export class UsersService {
               revokeReason: 'user_inactive',
             },
           });
+          if (targets.length > 0) {
+            await transaction.event.create({
+              data: {
+                eventType: 'SessionRevoked',
+                userId: id,
+                payload: { reason: 'user_inactive', metadata: {} },
+                deliveries: {
+                  create: targets.map((applicationId) => ({ applicationId })),
+                },
+              },
+            });
+          }
         }
 
         await transaction.auditLog.create({
@@ -162,6 +178,7 @@ export class UsersService {
   ): Promise<UserResponse> {
     const passwordHash = await this.passwordService.hash(dto.password);
     const changedAt = new Date();
+    const targets = await this.findUserApplicationTargets(id);
 
     try {
       return await this.authPrisma.$transaction(async (transaction) => {
@@ -179,6 +196,18 @@ export class UsersService {
             revokeReason: 'password_changed',
           },
         });
+        if (targets.length > 0) {
+          await transaction.event.create({
+            data: {
+              eventType: 'PasswordChanged',
+              userId: id,
+              payload: { reason: 'password_changed', metadata: {} },
+              deliveries: {
+                create: targets.map((applicationId) => ({ applicationId })),
+              },
+            },
+          });
+        }
 
         await transaction.auditLog.create({
           data: {
@@ -207,5 +236,13 @@ export class UsersService {
     }
 
     throw error;
+  }
+
+  private async findUserApplicationTargets(userId: string): Promise<string[]> {
+    const applications = await this.authPrisma.application.findMany({
+      where: { accessTokens: { some: { userId } } },
+      select: { id: true },
+    });
+    return applications.map((application) => application.id);
   }
 }

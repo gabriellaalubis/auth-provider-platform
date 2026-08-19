@@ -1,4 +1,3 @@
-import { UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
 import { SessionService } from '../auth/session.service';
@@ -27,24 +26,31 @@ describe('OAuthController', () => {
     );
   });
 
-  it('menolak authorize ketika central cookie tidak tersedia', async () => {
-    const request = { cookies: {} } as Request;
-    const response = { redirect: jest.fn() } as unknown as Response;
+  it('mengarahkan browser ke halaman login ketika central cookie tidak tersedia', async () => {
+    const request = {
+      cookies: {},
+      originalUrl: '/oauth/authorize?client_id=app-a',
+    } as Request;
+    const redirect = jest.fn();
+    const response = { redirect } as unknown as Response;
 
-    await expect(
-      controller.authorize(
-        {
-          response_type: 'code',
-          client_id: 'app-a',
-          redirect_uri: 'http://localhost:4001/callback',
-          state: 'state-yang-panjang-dan-acak-123456',
-          code_challenge: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
-          code_challenge_method: 'S256',
-        },
-        request,
-        response,
-      ),
-    ).rejects.toBeInstanceOf(UnauthorizedException);
+    await controller.authorize(
+      {
+        response_type: 'code',
+        client_id: 'app-a',
+        redirect_uri: 'http://localhost:4001/callback',
+        state: 'state-yang-panjang-dan-acak-123456',
+        code_challenge: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+        code_challenge_method: 'S256',
+      },
+      request,
+      response,
+    );
+
+    expect(redirect).toHaveBeenCalledWith(
+      302,
+      '/auth/login?return_to=%2Foauth%2Fauthorize%3Fclient_id%3Dapp-a',
+    );
   });
 
   it('melakukan redirect dengan code dan state setelah authorize sukses', async () => {

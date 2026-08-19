@@ -7,6 +7,7 @@ import { RequestIdMiddleware } from '@app/shared';
 import { SecurityModule } from '@app/security';
 import { AuthModule } from './auth/auth.module';
 import { OAuthModule } from './oauth/oauth.module';
+import { EventsModule } from './events/events.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { OAuthModule } from './oauth/oauth.module';
     SecurityModule,
     AuthModule,
     OAuthModule,
+    EventsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

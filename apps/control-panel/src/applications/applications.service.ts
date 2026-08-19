@@ -127,6 +127,15 @@ export class ApplicationsService {
       throw new NotFoundException('Application tidak ditemukan');
     }
 
+    const usersToRevoke =
+      dto.status === 'INACTIVE'
+        ? await this.authPrisma.accessToken.findMany({
+            where: { applicationId: id },
+            select: { userId: true },
+            distinct: ['userId'],
+          })
+        : [];
+
     try {
       return await this.authPrisma.$transaction(async (transaction) => {
         await transaction.application.update({
@@ -167,6 +176,17 @@ export class ApplicationsService {
             metadata: { action: 'update' },
           },
         });
+        for (const target of usersToRevoke) {
+          await transaction.event.create({
+            data: {
+              eventType: 'AccessPolicyChanged',
+              userId: target.userId,
+              applicationId: id,
+              payload: { reason: 'application_inactive', metadata: {} },
+              deliveries: { create: { applicationId: id } },
+            },
+          });
+        }
 
         const application = await transaction.application.findUnique({
           where: { id },
@@ -221,10 +241,37 @@ export class ApplicationsService {
       throw new NotFoundException('Policy tidak ditemukan');
     }
 
+    const affectedUsers = await this.authPrisma.userGroup.findMany({
+      where: { groupId },
+      select: { userId: true },
+    });
+
     await this.authPrisma.$transaction(async (transaction) => {
       await transaction.applicationGroup.delete({
         where: { applicationId_groupId: { applicationId, groupId } },
       });
+      for (const affected of affectedUsers) {
+        const remainingPolicy = await transaction.applicationGroup.findFirst({
+          where: {
+            applicationId,
+            group: { users: { some: { userId: affected.userId } } },
+          },
+        });
+        if (!remainingPolicy) {
+          await transaction.event.create({
+            data: {
+              eventType: 'AccessPolicyChanged',
+              userId: affected.userId,
+              applicationId,
+              payload: {
+                reason: 'application_policy_removed',
+                metadata: { groupId },
+              },
+              deliveries: { create: { applicationId } },
+            },
+          });
+        }
+      }
       await transaction.auditLog.create({
         data: {
           eventType: 'POLICY_CHANGED',

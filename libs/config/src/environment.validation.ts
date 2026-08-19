@@ -34,6 +34,12 @@ export const environmentValidationSchema = Joi.object({
   RABBITMQ_URL: Joi.string()
     .uri({ scheme: ['amqp', 'amqps'] })
     .required(),
+  INTERNAL_LOGOUT_SECRET: Joi.string().min(32).max(256).required(),
+  EVENT_QUEUE_NAME: Joi.string().min(1).default('sso.events'),
+  EVENT_DLQ_NAME: Joi.string().min(1).default('sso.events.dlq'),
+  EVENT_PUBLISH_INTERVAL_MS: Joi.number().integer().min(100).default(1000),
+  EVENT_MAX_RETRIES: Joi.number().integer().min(1).max(10).default(5),
+  EVENT_RETRY_BASE_MS: Joi.number().integer().min(100).default(1000),
   AUTHORIZATION_CODE_TTL_SECONDS: Joi.number()
     .integer()
     .min(60)

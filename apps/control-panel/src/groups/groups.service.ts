@@ -144,10 +144,40 @@ export class GroupsService {
       throw new NotFoundException('Keanggotaan group tidak ditemukan');
     }
 
+    const candidateApplications =
+      await this.authPrisma.applicationGroup.findMany({
+        where: { groupId },
+        select: { applicationId: true },
+      });
+
     await this.authPrisma.$transaction(async (transaction) => {
       await transaction.userGroup.delete({
         where: { userId_groupId: { userId, groupId } },
       });
+      for (const candidate of candidateApplications) {
+        const remainingPolicy = await transaction.applicationGroup.findFirst({
+          where: {
+            applicationId: candidate.applicationId,
+            group: { users: { some: { userId } } },
+          },
+        });
+        if (!remainingPolicy) {
+          await transaction.event.create({
+            data: {
+              eventType: 'AccessPolicyChanged',
+              userId,
+              applicationId: candidate.applicationId,
+              payload: {
+                reason: 'group_membership_removed',
+                metadata: { groupId },
+              },
+              deliveries: {
+                create: { applicationId: candidate.applicationId },
+              },
+            },
+          });
+        }
+      }
       await transaction.auditLog.create({
         data: {
           eventType: 'GROUP_MEMBERSHIP_CHANGED',

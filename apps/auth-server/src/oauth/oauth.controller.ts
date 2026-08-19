@@ -9,7 +9,6 @@ import {
   Query,
   Req,
   Res,
-  UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
@@ -39,12 +38,20 @@ export class OAuthController {
   ): Promise<void> {
     const token = this.readCentralSessionToken(request);
     if (!token) {
-      throw new UnauthorizedException('Central session tidak valid');
+      response.redirect(
+        HttpStatus.FOUND,
+        `/auth/login?return_to=${encodeURIComponent(request.originalUrl)}`,
+      );
+      return;
     }
 
     const auth = await this.sessionService.getValidSession(token);
     if (!auth) {
-      throw new UnauthorizedException('Central session tidak valid');
+      response.redirect(
+        HttpStatus.FOUND,
+        `/auth/login?return_to=${encodeURIComponent(request.originalUrl)}`,
+      );
+      return;
     }
 
     const issued = await this.authorizationCodeService.issue({

@@ -4,6 +4,8 @@ export {
   AccessTokenStatus,
   ApplicationStatus,
   AuthorizationCodeStatus,
+  DeliveryStatus,
+  EventStatus,
   Prisma,
   SessionStatus,
   UserStatus,
