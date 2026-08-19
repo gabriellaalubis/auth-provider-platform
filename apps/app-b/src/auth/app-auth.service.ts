@@ -1,6 +1,6 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { AppAPrismaService, LocalSessionStatus } from '@app/app-a-database';
+import { AppBPrismaService, LocalSessionStatus } from '@app/app-b-database';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 
 interface TokenResponse {
@@ -42,14 +42,14 @@ export interface LocalSessionView {
 @Injectable()
 export class AppAuthService {
   constructor(
-    private readonly prisma: AppAPrismaService,
+    private readonly prisma: AppBPrismaService,
     private readonly config: ConfigService,
   ) {}
 
   async beginLogin(): Promise<StartedLogin> {
     const state = randomBytes(32).toString('base64url');
     const codeVerifier = randomBytes(32).toString('base64url');
-    const codeChallenge = createHash('sha256')
+    const challenge = createHash('sha256')
       .update(codeVerifier)
       .digest('base64url');
     const ttl = this.config.getOrThrow<number>(
@@ -62,22 +62,22 @@ export class AppAuthService {
         expiresAt: new Date(Date.now() + ttl * 1000),
       },
     });
-    const authorizeUrl = new URL(
+    const url = new URL(
       '/oauth/authorize',
       this.config.getOrThrow<string>('AUTH_SERVER_PUBLIC_URL'),
     );
-    authorizeUrl.searchParams.set('response_type', 'code');
-    authorizeUrl.searchParams.set(
+    url.searchParams.set('response_type', 'code');
+    url.searchParams.set(
       'client_id',
-      this.config.getOrThrow<string>('APP_A_CLIENT_ID'),
+      this.config.getOrThrow<string>('APP_B_CLIENT_ID'),
     );
-    authorizeUrl.searchParams.set(
+    url.searchParams.set(
       'redirect_uri',
-      this.config.getOrThrow<string>('APP_A_REDIRECT_URI'),
+      this.config.getOrThrow<string>('APP_B_REDIRECT_URI'),
     );
-    authorizeUrl.searchParams.set('state', state);
-    authorizeUrl.searchParams.set('code_challenge', codeChallenge);
-    authorizeUrl.searchParams.set('code_challenge_method', 'S256');
+    url.searchParams.set('state', state);
+    url.searchParams.set('code_challenge', challenge);
+    url.searchParams.set('code_challenge_method', 'S256');
     await this.prisma.activityLog.create({
       data: {
         eventType: 'OAUTH_REDIRECT_STARTED',
@@ -85,7 +85,7 @@ export class AppAuthService {
         correlationId: attempt.id,
       },
     });
-    return { attemptId: attempt.id, authorizeUrl: authorizeUrl.toString() };
+    return { attemptId: attempt.id, authorizeUrl: url.toString() };
   }
 
   async completeCallback(
@@ -94,7 +94,7 @@ export class AppAuthService {
     state: string,
   ): Promise<string> {
     const invalid = new UnauthorizedException(
-      'Proses login tidak valid atau sudah kedaluwarsa',
+      'The sign-in request is invalid or expired',
     );
     const now = new Date();
     const attempt = await this.prisma.oAuthLoginAttempt.findUnique({
@@ -112,59 +112,55 @@ export class AppAuthService {
       where: { id: attempt.id, usedAt: null, expiresAt: { gt: now } },
       data: { usedAt: now },
     });
-    if (consumed.count !== 1) {
-      throw invalid;
-    }
+    if (consumed.count !== 1) throw invalid;
 
     const token = await this.exchangeCode(code, attempt.codeVerifier);
-    const userInfo = await this.fetchUserInfo(token.access_token);
+    const user = await this.fetchUserInfo(token.access_token);
     const localToken = randomBytes(32).toString('base64url');
     const ttl = this.config.getOrThrow<number>('LOCAL_SESSION_TTL_SECONDS');
     await this.prisma.$transaction(async (transaction) => {
       await transaction.profileCache.upsert({
-        where: { externalUserId: userInfo.sub },
+        where: { externalUserId: user.sub },
         create: {
-          externalUserId: userInfo.sub,
-          name: userInfo.name,
-          email: userInfo.email,
-          groups: userInfo.groups,
+          externalUserId: user.sub,
+          name: user.name,
+          email: user.email,
+          groups: user.groups,
           syncedAt: now,
         },
         update: {
-          name: userInfo.name,
-          email: userInfo.email,
-          groups: userInfo.groups,
+          name: user.name,
+          email: user.email,
+          groups: user.groups,
           syncedAt: now,
         },
       });
       await transaction.localSession.create({
         data: {
           sessionTokenHash: this.hash(localToken),
-          externalUserId: userInfo.sub,
-          centralSessionId: userInfo.centralSessionId,
+          externalUserId: user.sub,
+          centralSessionId: user.centralSessionId,
           expiresAt: new Date(now.getTime() + ttl * 1000),
         },
       });
-      await transaction.activityLog.create({
-        data: {
-          eventType: 'AUTHORIZATION_CALLBACK_RECEIVED',
-          message: 'Authorization callback received',
-          correlationId: attempt.id,
-        },
-      });
-      await transaction.activityLog.create({
-        data: {
-          eventType: 'USERINFO_FETCHED',
-          message: 'User profile fetched from the identity provider',
-          correlationId: attempt.id,
-        },
-      });
-      await transaction.activityLog.create({
-        data: {
-          eventType: 'LOCAL_SESSION_CREATED',
-          message: 'Local session created',
-          correlationId: attempt.id,
-        },
+      await transaction.activityLog.createMany({
+        data: [
+          {
+            eventType: 'AUTHORIZATION_CALLBACK_RECEIVED',
+            message: 'Authorization callback received',
+            correlationId: attempt.id,
+          },
+          {
+            eventType: 'USERINFO_FETCHED',
+            message: 'User profile fetched from the identity provider',
+            correlationId: attempt.id,
+          },
+          {
+            eventType: 'LOCAL_SESSION_CREATED',
+            message: 'Local session created',
+            correlationId: attempt.id,
+          },
+        ],
       });
     });
     return localToken;
@@ -219,7 +215,7 @@ export class AppAuthService {
     if (!rawToken) return;
     const now = new Date();
     await this.prisma.$transaction(async (transaction) => {
-      const revoked = await transaction.localSession.updateMany({
+      const result = await transaction.localSession.updateMany({
         where: {
           sessionTokenHash: this.hash(rawToken),
           status: LocalSessionStatus.ACTIVE,
@@ -230,7 +226,7 @@ export class AppAuthService {
           revokeReason: 'local_logout',
         },
       });
-      if (revoked.count === 1) {
+      if (result.count === 1) {
         await transaction.activityLog.create({
           data: {
             eventType: 'LOCAL_LOGOUT',
@@ -243,48 +239,46 @@ export class AppAuthService {
 
   private async exchangeCode(
     code: string,
-    codeVerifier: string,
+    verifier: string,
   ): Promise<TokenResponse> {
-    const url = new URL(
-      '/oauth/token',
-      this.config.getOrThrow<string>('AUTH_SERVER_INTERNAL_URL'),
+    const response = await fetch(
+      new URL(
+        '/oauth/token',
+        this.config.getOrThrow<string>('AUTH_SERVER_INTERNAL_URL'),
+      ),
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          grant_type: 'authorization_code',
+          code,
+          redirect_uri: this.config.getOrThrow<string>('APP_B_REDIRECT_URI'),
+          client_id: this.config.getOrThrow<string>('APP_B_CLIENT_ID'),
+          client_secret: this.config.getOrThrow<string>('APP_B_CLIENT_SECRET'),
+          code_verifier: verifier,
+        }),
+      },
     );
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        grant_type: 'authorization_code',
-        code,
-        redirect_uri: this.config.getOrThrow<string>('APP_A_REDIRECT_URI'),
-        client_id: this.config.getOrThrow<string>('APP_A_CLIENT_ID'),
-        client_secret: this.config.getOrThrow<string>('APP_A_CLIENT_SECRET'),
-        code_verifier: codeVerifier,
-      }),
-    });
-    if (!response.ok) {
-      throw new UnauthorizedException('Proses login gagal');
-    }
+    if (!response.ok) throw new UnauthorizedException('Sign-in failed');
     const value: unknown = await response.json();
     if (!this.isTokenResponse(value)) {
-      throw new UnauthorizedException('Proses login gagal');
+      throw new UnauthorizedException('Sign-in failed');
     }
     return value;
   }
 
   private async fetchUserInfo(accessToken: string): Promise<UserInfoResponse> {
-    const url = new URL(
-      '/oauth/userinfo',
-      this.config.getOrThrow<string>('AUTH_SERVER_INTERNAL_URL'),
+    const response = await fetch(
+      new URL(
+        '/oauth/userinfo',
+        this.config.getOrThrow<string>('AUTH_SERVER_INTERNAL_URL'),
+      ),
+      { headers: { authorization: `Bearer ${accessToken}` } },
     );
-    const response = await fetch(url, {
-      headers: { authorization: `Bearer ${accessToken}` },
-    });
-    if (!response.ok) {
-      throw new UnauthorizedException('Proses login gagal');
-    }
+    if (!response.ok) throw new UnauthorizedException('Sign-in failed');
     const value: unknown = await response.json();
     if (!this.isUserInfoResponse(value)) {
-      throw new UnauthorizedException('Proses login gagal');
+      throw new UnauthorizedException('Sign-in failed');
     }
     return value;
   }
@@ -294,34 +288,31 @@ export class AppAuthService {
   }
 
   private equalHashes(left: string, right: string): boolean {
-    const leftBuffer = Buffer.from(left, 'hex');
-    const rightBuffer = Buffer.from(right, 'hex');
-    return (
-      leftBuffer.length === rightBuffer.length &&
-      timingSafeEqual(leftBuffer, rightBuffer)
-    );
+    const a = Buffer.from(left, 'hex');
+    const b = Buffer.from(right, 'hex');
+    return a.length === b.length && timingSafeEqual(a, b);
   }
 
   private isTokenResponse(value: unknown): value is TokenResponse {
     if (typeof value !== 'object' || value === null) return false;
-    const record = value as Record<string, unknown>;
+    const data = value as Record<string, unknown>;
     return (
-      typeof record.access_token === 'string' &&
-      record.token_type === 'Bearer' &&
-      typeof record.expires_in === 'number'
+      typeof data.access_token === 'string' &&
+      data.token_type === 'Bearer' &&
+      typeof data.expires_in === 'number'
     );
   }
 
   private isUserInfoResponse(value: unknown): value is UserInfoResponse {
     if (typeof value !== 'object' || value === null) return false;
-    const record = value as Record<string, unknown>;
+    const data = value as Record<string, unknown>;
     return (
-      typeof record.sub === 'string' &&
-      typeof record.name === 'string' &&
-      typeof record.email === 'string' &&
-      Array.isArray(record.groups) &&
-      record.groups.every((group) => typeof group === 'string') &&
-      typeof record.centralSessionId === 'string'
+      typeof data.sub === 'string' &&
+      typeof data.name === 'string' &&
+      typeof data.email === 'string' &&
+      Array.isArray(data.groups) &&
+      data.groups.every((group) => typeof group === 'string') &&
+      typeof data.centralSessionId === 'string'
     );
   }
 

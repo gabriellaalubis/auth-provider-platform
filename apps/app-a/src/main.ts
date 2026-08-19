@@ -1,11 +1,14 @@
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppAModule } from './app-a.module';
 import cookieParser from 'cookie-parser';
+import { join } from 'node:path';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppAModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppAModule);
   app.use(cookieParser());
+  app.useStaticAssets(join(process.cwd(), 'apps', 'app-a', 'public'));
   const configService = app.get(ConfigService);
   const port = configService.getOrThrow<number>('APP_A_PORT');
 

@@ -5,7 +5,7 @@ import type { AuthResponse, ErrorResponse } from '@app/contracts';
 import { PasswordService } from '@app/security';
 import { StandardExceptionFilter } from '@app/shared';
 import cookieParser from 'cookie-parser';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import request from 'supertest';
 import type { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
@@ -16,6 +16,13 @@ describe('Auth central session (e2e)', () => {
   const email = `e2e-auth-${randomUUID()}@example.com`;
   const password = 'e2e-auth-password-yang-aman';
   let userId = '';
+  let appAGroupId = '';
+
+  function createPkcePair(): { verifier: string; challenge: string } {
+    const verifier = randomBytes(32).toString('base64url');
+    const challenge = createHash('sha256').update(verifier).digest('base64url');
+    return { verifier, challenge };
+  }
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -44,6 +51,13 @@ describe('Auth central session (e2e)', () => {
       },
     });
     userId = user.id;
+    const group = await prisma.group.findUniqueOrThrow({
+      where: { name: 'app-a-users' },
+    });
+    appAGroupId = group.id;
+    await prisma.userGroup.create({
+      data: { userId, groupId: appAGroupId },
+    });
   });
 
   afterAll(async () => {
@@ -53,6 +67,7 @@ describe('Auth central session (e2e)', () => {
       await prisma.centralSession.deleteMany({ where: { userId } });
       await prisma.auditLog.deleteMany({ where: { userId } });
       await prisma.event.deleteMany({ where: { userId } });
+      await prisma.userGroup.deleteMany({ where: { userId } });
       await prisma.user.deleteMany({ where: { id: userId } });
     }
     await app.close();
@@ -103,5 +118,72 @@ describe('Auth central session (e2e)', () => {
     });
     expect(revoked.status).toBe('REVOKED');
     expect(revoked.revokeReason).toBe('central_logout');
+  });
+
+  it('menyelesaikan authorization code, PKCE, token, dan userinfo', async () => {
+    const clientSecret = process.env.APP_A_CLIENT_SECRET;
+    if (!clientSecret) throw new Error('APP_A_CLIENT_SECRET tidak tersedia');
+    const agent = request.agent(app.getHttpServer());
+    await agent.post('/auth/login').send({ email, password }).expect(200);
+    const pkce = createPkcePair();
+    const state = randomBytes(24).toString('base64url');
+    const authorize = await agent
+      .get('/oauth/authorize')
+      .query({
+        response_type: 'code',
+        client_id: 'app-a',
+        redirect_uri: 'http://localhost:4001/callback',
+        state,
+        code_challenge: pkce.challenge,
+        code_challenge_method: 'S256',
+      })
+      .expect(302);
+    const location = authorize.headers.location;
+    if (typeof location !== 'string') {
+      throw new Error('OAuth redirect location tidak tersedia');
+    }
+    const callback = new URL(location);
+    const code = callback.searchParams.get('code');
+    expect(callback.origin + callback.pathname).toBe(
+      'http://localhost:4001/callback',
+    );
+    expect(callback.searchParams.get('state')).toBe(state);
+    expect(code).toHaveLength(43);
+    if (!code) throw new Error('Authorization code tidak tersedia');
+
+    const grant = {
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: 'http://localhost:4001/callback',
+      client_id: 'app-a',
+      client_secret: clientSecret,
+      code_verifier: pkce.verifier,
+    };
+    const tokenResponse = await request(app.getHttpServer())
+      .post('/oauth/token')
+      .send(grant)
+      .expect(200);
+    const tokenBody = tokenResponse.body as unknown as {
+      access_token: string;
+      token_type: string;
+      expires_in: number;
+    };
+    expect(tokenBody.access_token).toHaveLength(43);
+    expect(tokenBody.token_type).toBe('Bearer');
+
+    const userInfo = await request(app.getHttpServer())
+      .get('/oauth/userinfo')
+      .set('Authorization', `Bearer ${tokenBody.access_token}`)
+      .expect(200);
+    expect(userInfo.body).toMatchObject({
+      sub: userId,
+      email,
+      centralSessionId: expect.any(String) as string,
+    });
+    expect(userInfo.body).not.toHaveProperty('passwordHash');
+    await request(app.getHttpServer())
+      .post('/oauth/token')
+      .send(grant)
+      .expect(400);
   });
 });

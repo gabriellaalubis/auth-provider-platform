@@ -11,6 +11,7 @@
     "^@app/contracts(|/.*)$": "<rootDir>/../../../libs/contracts/src/$1",
     "^@app/shared(|/.*)$": "<rootDir>/../../../libs/shared/src/$1",
     "^@app/auth-database(|/.*)$": "<rootDir>/../../../libs/auth-database/src/$1",
+    "^@app/app-a-database(|/.*)$": "<rootDir>/../../../libs/app-a-database/src/$1",
     "^@app/security(|/.*)$": "<rootDir>/../../../libs/security/src/$1"
   }
 }

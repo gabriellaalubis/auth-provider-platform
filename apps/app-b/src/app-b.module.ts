@@ -3,9 +3,10 @@ import { PlatformConfigModule } from '@app/config';
 import { AppBController } from './app-b.controller';
 import { AppBService } from './app-b.service';
 import { AppBDatabaseModule } from '@app/app-b-database';
+import { AppAuthModule } from './auth/app-auth.module';
 
 @Module({
-  imports: [PlatformConfigModule, AppBDatabaseModule],
+  imports: [PlatformConfigModule, AppBDatabaseModule, AppAuthModule],
   controllers: [AppBController],
   providers: [AppBService],
 })
