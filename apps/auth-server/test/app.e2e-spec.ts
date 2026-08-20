@@ -92,6 +92,48 @@ describe('Auth central session (e2e)', () => {
     });
   });
 
+  it('menyediakan dashboard dan endpoint observability', async () => {
+    const dashboard = await request(app.getHttpServer())
+      .get('/metrics')
+      .expect('Content-Type', /html/)
+      .expect(200);
+    expect(dashboard.text).toContain('System health at a glance');
+    expect(dashboard.text).toContain("fetch('/metrics/data'");
+
+    const data = await request(app.getHttpServer())
+      .get('/metrics/data')
+      .expect(200);
+    expect(data.body).toMatchObject({
+      generatedAt: expect.any(String) as string,
+      uptimeSeconds: expect.any(Number) as number,
+      http: {
+        totalRequests: expect.any(Number) as number,
+        requestsLastMinute: expect.any(Number) as number,
+        totalErrors: expect.any(Number) as number,
+        errorsLastMinute: expect.any(Number) as number,
+        errorRatePercent: expect.any(Number) as number,
+        averageLatencyMilliseconds: expect.any(Number) as number,
+        p95LatencyMilliseconds: expect.any(Number) as number,
+      },
+      queues: {
+        available: true,
+        mainDepth: expect.any(Number) as number,
+        retryDepth: expect.any(Number) as number,
+        deadLetterDepth: expect.any(Number) as number,
+        consumerCount: expect.any(Number) as number,
+      },
+    });
+
+    const prometheus = await request(app.getHttpServer())
+      .get('/metrics/prometheus')
+      .expect('Content-Type', /text\/plain/)
+      .expect(200);
+    expect(prometheus.text).toContain('sso_http_requests_total');
+    expect(prometheus.text).toContain(
+      'sso_queue_messages{queue="dead_letter"}',
+    );
+  });
+
   it('memberi error generik untuk credential salah', async () => {
     const response = await request(app.getHttpServer())
       .post('/auth/login')

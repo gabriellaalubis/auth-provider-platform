@@ -49,6 +49,7 @@ describe('AppController', () => {
       const result = await appController.home({ cookies: {} } as Request);
       expect(result).toContain('Central Sign-On');
       expect(result).toContain('Sign in');
+      expect(result).toContain('View system metrics');
     });
 
     it('renders identity and the global logout button for an active session', () => {
@@ -72,6 +73,7 @@ describe('AppController', () => {
       });
       expect(result).toContain('Hello, Test User');
       expect(result).toContain('Sign out everywhere');
+      expect(result).toContain('View system metrics');
       expect(result).toContain("fetch('/auth/logout'");
     });
   });

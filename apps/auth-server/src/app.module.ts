@@ -9,6 +9,9 @@ import { AuthModule } from './auth/auth.module';
 import { OAuthModule } from './oauth/oauth.module';
 import { EventsModule } from './events/events.module';
 import { HealthService } from './health/health.service';
+import { MetricsController } from './metrics/metrics.controller';
+import { MetricsMiddleware } from './metrics/metrics.middleware';
+import { MetricsService } from './metrics/metrics.service';
 
 @Module({
   imports: [
@@ -19,11 +22,11 @@ import { HealthService } from './health/health.service';
     OAuthModule,
     EventsModule,
   ],
-  controllers: [AppController],
-  providers: [AppService, HealthService],
+  controllers: [AppController, MetricsController],
+  providers: [AppService, HealthService, MetricsService, MetricsMiddleware],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
-    consumer.apply(RequestIdMiddleware).forRoutes('*');
+    consumer.apply(RequestIdMiddleware, MetricsMiddleware).forRoutes('*');
   }
 }
