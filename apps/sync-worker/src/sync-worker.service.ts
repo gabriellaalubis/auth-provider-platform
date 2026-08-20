@@ -16,6 +16,9 @@ import {
 export class SyncWorkerService implements OnModuleInit, OnModuleDestroy {
   private connection?: ChannelModel;
   private channel?: Channel;
+  private consumerTag?: string;
+  private shuttingDown = false;
+  private readonly inFlight = new Set<Promise<void>>();
 
   constructor(
     private readonly prisma: AuthPrismaService,
@@ -34,12 +37,27 @@ export class SyncWorkerService implements OnModuleInit, OnModuleDestroy {
       { durable: true },
     );
     await this.channel.prefetch(4);
-    await this.channel.consume(queue, (message) => {
-      if (message) void this.process(message);
+    const consumer = await this.channel.consume(queue, (message) => {
+      if (!message || !this.channel) return;
+      if (this.shuttingDown) {
+        this.channel.nack(message, false, true);
+        return;
+      }
+      const operation = this.process(message);
+      const tracked = operation
+        .catch(() => this.requeue(message))
+        .finally(() => this.inFlight.delete(tracked));
+      this.inFlight.add(tracked);
     });
+    this.consumerTag = consumer.consumerTag;
   }
 
   async onModuleDestroy(): Promise<void> {
+    this.shuttingDown = true;
+    if (this.channel && this.consumerTag) {
+      await this.channel.cancel(this.consumerTag);
+    }
+    await this.waitForInFlightMessages();
     await this.channel?.close();
     await this.connection?.close();
   }
@@ -175,5 +193,31 @@ export class SyncWorkerService implements OnModuleInit, OnModuleDestroy {
     )
       throw new Error('Invalid event');
     return value as PlatformEventPayload;
+  }
+
+  private async waitForInFlightMessages(): Promise<void> {
+    if (this.inFlight.size === 0) return;
+    const timeout = this.config.getOrThrow<number>('SHUTDOWN_TIMEOUT_MS');
+    let timer: NodeJS.Timeout | undefined;
+    const deadline = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, timeout);
+    });
+
+    try {
+      await Promise.race([
+        Promise.allSettled([...this.inFlight]).then(() => undefined),
+        deadline,
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
+  private requeue(message: ConsumeMessage): void {
+    try {
+      this.channel?.nack(message, false, true);
+    } catch (error: unknown) {
+      void error;
+    }
   }
 }

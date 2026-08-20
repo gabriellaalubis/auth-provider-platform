@@ -4,7 +4,7 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppBModule } from './app-b.module';
 import cookieParser from 'cookie-parser';
 import { join } from 'node:path';
-import { StandardExceptionFilter } from '@app/shared';
+import { registerGracefulShutdown, StandardExceptionFilter } from '@app/shared';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppBModule);
@@ -15,6 +15,10 @@ async function bootstrap() {
   const port = configService.getOrThrow<number>('APP_B_PORT');
 
   await app.listen(port, '0.0.0.0');
+  registerGracefulShutdown(
+    app,
+    configService.getOrThrow<number>('SHUTDOWN_TIMEOUT_MS'),
+  );
 }
 
 bootstrap().catch((error: unknown) => {

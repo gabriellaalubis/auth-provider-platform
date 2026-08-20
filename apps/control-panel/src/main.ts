@@ -2,7 +2,7 @@ import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ControlPanelModule } from './control-panel.module';
-import { StandardExceptionFilter } from '@app/shared';
+import { registerGracefulShutdown, StandardExceptionFilter } from '@app/shared';
 
 async function bootstrap() {
   const app = await NestFactory.create(ControlPanelModule);
@@ -18,6 +18,10 @@ async function bootstrap() {
   const port = configService.getOrThrow<number>('CONTROL_PANEL_PORT');
 
   await app.listen(port, '0.0.0.0');
+  registerGracefulShutdown(
+    app,
+    configService.getOrThrow<number>('SHUTDOWN_TIMEOUT_MS'),
+  );
 }
 
 bootstrap().catch((error: unknown) => {

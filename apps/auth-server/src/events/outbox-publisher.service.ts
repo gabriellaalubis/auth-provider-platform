@@ -10,6 +10,8 @@ export class OutboxPublisherService implements OnModuleInit, OnModuleDestroy {
   private channel?: ConfirmChannel;
   private timer?: NodeJS.Timeout;
   private publishing = false;
+  private shuttingDown = false;
+  private activePublish?: Promise<void>;
 
   constructor(
     private readonly prisma: AuthPrismaService,
@@ -37,57 +39,87 @@ export class OutboxPublisherService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleDestroy(): Promise<void> {
+    this.shuttingDown = true;
     if (this.timer) clearInterval(this.timer);
+    if (this.activePublish) {
+      await this.waitUntilSettled(this.activePublish);
+    }
+    try {
+      await this.channel?.waitForConfirms();
+    } catch (error: unknown) {
+      void error;
+    }
     await this.channel?.close();
     await this.connection?.close();
   }
 
   async publishBatch(): Promise<void> {
-    if (this.publishing || !this.channel) return;
+    if (this.publishing || this.shuttingDown || !this.channel) return;
     this.publishing = true;
+    const operation = this.publishPendingEvents();
+    this.activePublish = operation;
     try {
-      const events = await this.prisma.event.findMany({
-        where: { status: EventStatus.PENDING },
-        include: {
-          deliveries: { include: { application: true } },
-        },
-        orderBy: { createdAt: 'asc' },
-        take: 20,
-      });
-      for (const event of events) {
-        for (const delivery of event.deliveries) {
-          const source = event.payload as Record<string, unknown>;
-          const payload: PlatformEventPayload = {
-            eventId: event.id,
-            deliveryId: delivery.id,
-            eventType: event.eventType as PlatformEventType,
-            userId: event.userId,
-            centralSessionId: event.centralSessionId,
-            applicationId: delivery.applicationId,
-            logoutNotificationUrl: delivery.application.logoutNotificationUrl,
-            reason:
-              typeof source.reason === 'string' ? source.reason : 'revoked',
-            occurredAt: event.createdAt.toISOString(),
-            attempt: 0,
-            metadata:
-              typeof source.metadata === 'object' && source.metadata !== null
-                ? (source.metadata as Record<string, unknown>)
-                : {},
-          };
-          this.channel.sendToQueue(
-            this.config.getOrThrow<string>('EVENT_QUEUE_NAME'),
-            Buffer.from(JSON.stringify(payload)),
-            { persistent: true, contentType: 'application/json' },
-          );
-        }
-        await this.channel.waitForConfirms();
-        await this.prisma.event.update({
-          where: { id: event.id },
-          data: { status: EventStatus.PUBLISHED, publishedAt: new Date() },
-        });
-      }
+      await operation;
     } finally {
       this.publishing = false;
+      if (this.activePublish === operation) this.activePublish = undefined;
+    }
+  }
+
+  private async publishPendingEvents(): Promise<void> {
+    if (!this.channel) return;
+    const events = await this.prisma.event.findMany({
+      where: { status: EventStatus.PENDING },
+      include: {
+        deliveries: { include: { application: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+      take: 20,
+    });
+    for (const event of events) {
+      for (const delivery of event.deliveries) {
+        const source = event.payload as Record<string, unknown>;
+        const payload: PlatformEventPayload = {
+          eventId: event.id,
+          deliveryId: delivery.id,
+          eventType: event.eventType as PlatformEventType,
+          userId: event.userId,
+          centralSessionId: event.centralSessionId,
+          applicationId: delivery.applicationId,
+          logoutNotificationUrl: delivery.application.logoutNotificationUrl,
+          reason: typeof source.reason === 'string' ? source.reason : 'revoked',
+          occurredAt: event.createdAt.toISOString(),
+          attempt: 0,
+          metadata:
+            typeof source.metadata === 'object' && source.metadata !== null
+              ? (source.metadata as Record<string, unknown>)
+              : {},
+        };
+        this.channel.sendToQueue(
+          this.config.getOrThrow<string>('EVENT_QUEUE_NAME'),
+          Buffer.from(JSON.stringify(payload)),
+          { persistent: true, contentType: 'application/json' },
+        );
+      }
+      await this.channel.waitForConfirms();
+      await this.prisma.event.update({
+        where: { id: event.id },
+        data: { status: EventStatus.PUBLISHED, publishedAt: new Date() },
+      });
+    }
+  }
+
+  private async waitUntilSettled(operation: Promise<void>): Promise<void> {
+    const timeout = this.config.getOrThrow<number>('SHUTDOWN_TIMEOUT_MS');
+    let timer: NodeJS.Timeout | undefined;
+    const deadline = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, timeout);
+    });
+
+    try {
+      await Promise.race([operation.catch(() => undefined), deadline]);
+    } finally {
+      if (timer) clearTimeout(timer);
     }
   }
 }

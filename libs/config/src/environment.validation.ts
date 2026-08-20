@@ -40,6 +40,11 @@ export const environmentValidationSchema = Joi.object({
   EVENT_PUBLISH_INTERVAL_MS: Joi.number().integer().min(100).default(1000),
   EVENT_MAX_RETRIES: Joi.number().integer().min(1).max(10).default(5),
   EVENT_RETRY_BASE_MS: Joi.number().integer().min(100).default(1000),
+  SHUTDOWN_TIMEOUT_MS: Joi.number()
+    .integer()
+    .min(1000)
+    .max(60000)
+    .default(10000),
   AUTHORIZATION_CODE_TTL_SECONDS: Joi.number()
     .integer()
     .min(60)

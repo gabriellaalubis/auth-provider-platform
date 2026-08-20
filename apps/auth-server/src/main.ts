@@ -2,7 +2,7 @@ import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
-import { StandardExceptionFilter } from '@app/shared';
+import { registerGracefulShutdown, StandardExceptionFilter } from '@app/shared';
 import cookieParser from 'cookie-parser';
 
 async function bootstrap() {
@@ -20,6 +20,10 @@ async function bootstrap() {
   const port = configService.getOrThrow<number>('AUTH_SERVER_PORT');
 
   await app.listen(port, '0.0.0.0');
+  registerGracefulShutdown(
+    app,
+    configService.getOrThrow<number>('SHUTDOWN_TIMEOUT_MS'),
+  );
 }
 
 bootstrap().catch((error: unknown) => {

@@ -23,6 +23,7 @@ x-app-environment: &app-environment
   EVENT_PUBLISH_INTERVAL_MS: ${EVENT_PUBLISH_INTERVAL_MS:-1000}
   EVENT_MAX_RETRIES: ${EVENT_MAX_RETRIES:-5}
   EVENT_RETRY_BASE_MS: ${EVENT_RETRY_BASE_MS:-1000}
+  SHUTDOWN_TIMEOUT_MS: ${SHUTDOWN_TIMEOUT_MS:-10000}
   AUTHORIZATION_CODE_TTL_SECONDS: ${AUTHORIZATION_CODE_TTL_SECONDS:-300}
   ACCESS_TOKEN_TTL_SECONDS: ${ACCESS_TOKEN_TTL_SECONDS:-900}
   AUTH_SERVER_PUBLIC_URL: ${AUTH_SERVER_PUBLIC_URL:-http://localhost:3000}
@@ -132,6 +133,7 @@ services:
       timeout: 5s
       retries: 10
     restart: unless-stopped
+    stop_grace_period: 15s
 
   control-panel:
     build:
@@ -155,6 +157,7 @@ services:
       timeout: 5s
       retries: 10
     restart: unless-stopped
+    stop_grace_period: 15s
 
   app-a:
     build:
@@ -178,6 +181,7 @@ services:
       timeout: 5s
       retries: 10
     restart: unless-stopped
+    stop_grace_period: 15s
 
   app-b:
     build:
@@ -201,6 +205,7 @@ services:
       timeout: 5s
       retries: 10
     restart: unless-stopped
+    stop_grace_period: 15s
 
   sync-worker:
     build:
@@ -224,6 +229,7 @@ services:
       timeout: 5s
       retries: 10
     restart: unless-stopped
+    stop_grace_period: 15s
 
 volumes:
   mysql_data:
