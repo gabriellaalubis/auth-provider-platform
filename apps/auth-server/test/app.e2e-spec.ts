@@ -73,6 +73,25 @@ describe('Auth central session (e2e)', () => {
     await app.close();
   });
 
+  it('membedakan liveness dan readiness', async () => {
+    await request(app.getHttpServer())
+      .get('/health/live')
+      .expect(200)
+      .expect({ status: 'live', service: 'auth-server' });
+
+    const readiness = await request(app.getHttpServer())
+      .get('/health/ready')
+      .expect(200);
+    expect(readiness.body).toEqual({
+      status: 'ready',
+      service: 'auth-server',
+      components: {
+        database: { status: 'up' },
+        messageBroker: { status: 'up' },
+      },
+    });
+  });
+
   it('memberi error generik untuk credential salah', async () => {
     const response = await request(app.getHttpServer())
       .post('/auth/login')

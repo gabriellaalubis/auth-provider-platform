@@ -1,9 +1,15 @@
-import { Controller, Get, Header, Req } from '@nestjs/common';
+import { Controller, Get, Header, Req, Res } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { HealthResponse } from '@app/contracts';
 import type { Request } from 'express';
 import { AppService } from './app.service';
 import { SessionService } from './auth/session.service';
+import type { Response } from 'express';
+import {
+  HealthService,
+  type LivenessResponse,
+  type ReadinessResponse,
+} from './health/health.service';
 
 @Controller()
 export class AppController {
@@ -11,6 +17,7 @@ export class AppController {
     private readonly appService: AppService,
     private readonly sessionService: SessionService,
     private readonly configService: ConfigService,
+    private readonly healthService: HealthService,
   ) {}
 
   @Get()
@@ -34,5 +41,19 @@ export class AppController {
   @Get('health')
   getHealth(): HealthResponse {
     return { status: 'ok', service: 'auth-server' };
+  }
+
+  @Get('health/live')
+  getLiveness(): LivenessResponse {
+    return this.healthService.getLiveness();
+  }
+
+  @Get('health/ready')
+  async getReadiness(
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<ReadinessResponse> {
+    const readiness = await this.healthService.getReadiness();
+    response.status(readiness.status === 'ready' ? 200 : 503);
+    return readiness;
   }
 }

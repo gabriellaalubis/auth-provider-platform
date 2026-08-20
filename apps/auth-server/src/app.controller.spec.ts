@@ -4,6 +4,7 @@ import { AppService } from './app.service';
 import { SessionService } from './auth/session.service';
 import { ConfigService } from '@nestjs/config';
 import type { Request } from 'express';
+import { HealthService } from './health/health.service';
 
 describe('AppController', () => {
   let appController: AppController;
@@ -18,6 +19,23 @@ describe('AppController', () => {
           provide: ConfigService,
           useValue: {
             getOrThrow: jest.fn().mockReturnValue('central_session'),
+          },
+        },
+        {
+          provide: HealthService,
+          useValue: {
+            getLiveness: jest.fn().mockReturnValue({
+              status: 'live',
+              service: 'auth-server',
+            }),
+            getReadiness: jest.fn().mockResolvedValue({
+              status: 'ready',
+              service: 'auth-server',
+              components: {
+                database: { status: 'up' },
+                messageBroker: { status: 'up' },
+              },
+            }),
           },
         },
       ],
@@ -55,6 +73,23 @@ describe('AppController', () => {
       expect(result).toContain('Hello, Test User');
       expect(result).toContain('Sign out everywhere');
       expect(result).toContain("fetch('/auth/logout'");
+    });
+  });
+
+  describe('health probes', () => {
+    it('returns the liveness result', () => {
+      expect(appController.getLiveness()).toEqual({
+        status: 'live',
+        service: 'auth-server',
+      });
+    });
+
+    it('returns HTTP 200 when every readiness dependency is available', async () => {
+      const status = jest.fn();
+      const result = await appController.getReadiness({ status } as never);
+
+      expect(status).toHaveBeenCalledWith(200);
+      expect(result.status).toBe('ready');
     });
   });
 });

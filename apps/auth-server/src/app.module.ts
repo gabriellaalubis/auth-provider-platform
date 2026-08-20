@@ -8,6 +8,7 @@ import { SecurityModule } from '@app/security';
 import { AuthModule } from './auth/auth.module';
 import { OAuthModule } from './oauth/oauth.module';
 import { EventsModule } from './events/events.module';
+import { HealthService } from './health/health.service';
 
 @Module({
   imports: [
@@ -19,7 +20,7 @@ import { EventsModule } from './events/events.module';
     EventsModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, HealthService],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {

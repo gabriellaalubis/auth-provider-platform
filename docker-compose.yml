@@ -116,7 +116,7 @@ services:
       args:
         APP_NAME: auth-server
     environment: *app-environment
-    command: ["node", "dist/apps/auth-server/main.js"]
+    command: ['node', 'dist/apps/auth-server/main.js']
     ports:
       - '3000:3000'
     depends_on: *app-dependencies
@@ -126,7 +126,7 @@ services:
           'CMD',
           'node',
           '-e',
-          "fetch('http://127.0.0.1:3000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+          "fetch('http://127.0.0.1:3000/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
         ]
       interval: 10s
       timeout: 5s
@@ -139,7 +139,7 @@ services:
       args:
         APP_NAME: control-panel
     environment: *app-environment
-    command: ["node", "dist/apps/control-panel/main.js"]
+    command: ['node', 'dist/apps/control-panel/main.js']
     ports:
       - '3001:3001'
     depends_on: *app-dependencies
@@ -162,7 +162,7 @@ services:
       args:
         APP_NAME: app-a
     environment: *app-environment
-    command: ["node", "dist/apps/app-a/main.js"]
+    command: ['node', 'dist/apps/app-a/main.js']
     ports:
       - '4001:4001'
     depends_on: *app-dependencies
@@ -185,7 +185,7 @@ services:
       args:
         APP_NAME: app-b
     environment: *app-environment
-    command: ["node", "dist/apps/app-b/main.js"]
+    command: ['node', 'dist/apps/app-b/main.js']
     ports:
       - '4002:4002'
     depends_on: *app-dependencies
@@ -208,7 +208,7 @@ services:
       args:
         APP_NAME: sync-worker
     environment: *app-environment
-    command: ["node", "dist/apps/sync-worker/main.js"]
+    command: ['node', 'dist/apps/sync-worker/main.js']
     ports:
       - '5000:5000'
     depends_on: *app-dependencies
