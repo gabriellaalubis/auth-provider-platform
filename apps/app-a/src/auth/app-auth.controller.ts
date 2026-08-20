@@ -46,7 +46,7 @@ export class AppAuthController {
     const attemptId = this.readCookie(request, 'app_a_oauth_attempt');
     if (!attemptId || !code || !state) {
       throw new UnauthorizedException(
-        'Proses login tidak valid atau sudah kedaluwarsa',
+        'The sign-in request is invalid or expired',
       );
     }
     let localToken: string;
@@ -82,7 +82,8 @@ export class AppAuthController {
       this.config.getOrThrow<string>('APP_A_LOCAL_SESSION_COOKIE_NAME'),
     );
     const session = token ? await this.appAuth.readLocalSession(token) : null;
-    if (!session) throw new UnauthorizedException('Local session tidak valid');
+    if (!session)
+      throw new UnauthorizedException('The local session is invalid');
     return session;
   }
 

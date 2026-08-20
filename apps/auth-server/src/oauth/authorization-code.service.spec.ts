@@ -120,7 +120,7 @@ describe('AuthorizationCodeService', () => {
 
   it('tidak membuat code ketika policy menolak', async () => {
     policyEvaluator.evaluate.mockRejectedValue(
-      new ForbiddenException('Akses ke aplikasi ditolak'),
+      new ForbiddenException('Application access denied'),
     );
 
     await expect(

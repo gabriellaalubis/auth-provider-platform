@@ -22,7 +22,7 @@ export class TokenExchangeService {
 
   async exchange(dto: TokenRequestDto): Promise<TokenResponse> {
     const invalidGrant = new BadRequestException(
-      'Authorization grant tidak valid',
+      'The authorization grant is invalid',
     );
 
     const now = new Date();

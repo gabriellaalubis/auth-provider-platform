@@ -73,9 +73,13 @@ export class AuthController {
       errorBox.textContent='';
       try{
         const response=await fetch('/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:form.email.value,password:form.password.value})});
-        if(!response.ok){const body=await response.json();throw new Error(body?.error?.message||'Sign-in failed');}
+        if(!response.ok){
+          if(response.status===401)throw new Error('Email or password is incorrect.');
+          const body=await response.json();
+          throw new Error(body?.error?.message||'Sign-in failed. Please try again.');
+        }
         window.location.assign(destination);
-      }catch(error){errorBox.textContent=error instanceof Error?error.message:'Sign-in failed';button.disabled=false;}
+      }catch(error){errorBox.textContent=error instanceof Error?error.message:'Sign-in failed. Please try again.';button.disabled=false;}
     });
   </script>
 </body>
@@ -97,12 +101,12 @@ export class AuthController {
   async session(@Req() request: Request): Promise<AuthResponse> {
     const token = this.readToken(request);
     if (!token) {
-      throw new UnauthorizedException('Session tidak tersedia');
+      throw new UnauthorizedException('A central session is required');
     }
 
     const auth = await this.sessionService.getValidSession(token);
     if (!auth) {
-      throw new UnauthorizedException('Session tidak valid');
+      throw new UnauthorizedException('The central session is invalid');
     }
 
     return auth;

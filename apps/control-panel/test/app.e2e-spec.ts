@@ -42,6 +42,19 @@ describe('Control Panel users (e2e)', () => {
     await app.close();
   });
 
+  it('serves the interactive administrative interface', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/')
+      .expect('Content-Type', /html/)
+      .expect(200);
+
+    expect(response.text).toContain('<title>SSO Control Panel</title>');
+    expect(response.text).toContain('Identity and access administration');
+    expect(response.text).toContain('Manage members');
+    expect(response.text).toContain('Manage access');
+    expect(response.text).not.toContain('Hello World!');
+  });
+
   it('menyelesaikan alur pengelolaan user tanpa membocorkan credential', async () => {
     const createResponse = await request(app.getHttpServer())
       .post('/users')

@@ -81,7 +81,7 @@ describe('Validation and standard error response (e2e)', () => {
     const body = response.body as unknown as ErrorResponse;
 
     expect(body.error.code).toBe('VALIDATION_ERROR');
-    expect(body.error.message).toBe('Data yang dikirim tidak valid');
+    expect(body.error.message).toBe('Some submitted data is invalid.');
     expect(typeof body.error.requestId).toBe('string');
     expect(body.error.requestId).not.toBe('');
     expect(body.error.requestId).toBe(response.headers['x-request-id']);
@@ -149,7 +149,7 @@ describe('Validation and standard error response (e2e)', () => {
     const body = response.body as unknown as ErrorResponse;
 
     expect(body.error.code).toBe('VALIDATION_ERROR');
-    expect(body.error.message).toBe('Data yang dikirim tidak valid');
+    expect(body.error.message).toBe('Some submitted data is invalid.');
     expect(typeof body.error.requestId).toBe('string');
     expect(body.error.requestId).not.toBe('');
     expect(response.headers['x-request-id']).toBe(body.error.requestId);
@@ -163,7 +163,9 @@ describe('Validation and standard error response (e2e)', () => {
     const body = response.body as unknown as ErrorResponse;
 
     expect(body.error.code).toBe('INTERNAL_ERROR');
-    expect(body.error.message).toBe('Terdapat kesalahan internal');
+    expect(body.error.message).toBe(
+      'Something went wrong. Please try again later.',
+    );
     expect(typeof body.error.requestId).toBe('string');
     expect(body.error.requestId).not.toBe('');
     expect(response.headers['x-request-id']).toBe(body.error.requestId);

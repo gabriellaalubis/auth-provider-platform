@@ -1,14 +1,13 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Header } from '@nestjs/common';
 import type { HealthResponse } from '@app/contracts';
-import { ControlPanelService } from './control-panel.service';
+import { renderAdminUi } from './admin-ui';
 
 @Controller()
 export class ControlPanelController {
-  constructor(private readonly controlPanelService: ControlPanelService) {}
-
   @Get()
-  getHello(): string {
-    return this.controlPanelService.getHello();
+  @Header('Content-Type', 'text/html; charset=utf-8')
+  getControlPanel(): string {
+    return renderAdminUi();
   }
 
   @Get('health')

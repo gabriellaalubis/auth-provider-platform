@@ -1,14 +1,34 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Header, Req } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import type { HealthResponse } from '@app/contracts';
+import type { Request } from 'express';
 import { AppService } from './app.service';
+import { SessionService } from './auth/session.service';
 
 @Controller()
 export class AppController {
-  constructor(private readonly appService: AppService) {}
+  constructor(
+    private readonly appService: AppService,
+    private readonly sessionService: SessionService,
+    private readonly configService: ConfigService,
+  ) {}
 
   @Get()
-  getHello(): string {
-    return this.appService.getHello();
+  @Header('Content-Type', 'text/html; charset=utf-8')
+  async home(@Req() request: Request): Promise<string> {
+    const cookieName = this.configService.getOrThrow<string>(
+      'SESSION_COOKIE_NAME',
+    );
+    const cookies: unknown = request.cookies;
+    const token =
+      typeof cookies === 'object' && cookies !== null
+        ? (cookies as Record<string, unknown>)[cookieName]
+        : undefined;
+    const auth =
+      typeof token === 'string'
+        ? await this.sessionService.getValidSession(token)
+        : null;
+    return this.appService.renderHome(auth);
   }
 
   @Get('health')

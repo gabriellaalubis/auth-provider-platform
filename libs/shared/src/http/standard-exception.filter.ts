@@ -21,26 +21,26 @@ export class StandardExceptionFilter implements ExceptionFilter {
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let code = 'INTERNAL_ERROR';
-    let message = 'Terdapat kesalahan internal';
+    let message = 'Something went wrong. Please try again later.';
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();
 
       if (status === HttpStatus.BAD_REQUEST) {
         code = 'VALIDATION_ERROR';
-        message = 'Data yang dikirim tidak valid';
+        message = 'Some submitted data is invalid.';
       } else if (status === HttpStatus.UNAUTHORIZED) {
         code = 'UNAUTHORIZED';
-        message = 'Autentikasi diperlukan atau tidak valid';
+        message = 'Authentication is required or invalid.';
       } else if (status === HttpStatus.FORBIDDEN) {
         code = 'ACCESS_DENIED';
-        message = 'Akses ditolak';
+        message = 'You do not have permission to perform this action.';
       } else if (status === HttpStatus.NOT_FOUND) {
         code = 'NOT_FOUND';
-        message = 'Resource tidak ditemukan';
+        message = 'The requested resource was not found.';
       } else if (status === HttpStatus.CONFLICT) {
         code = 'CONFLICT';
-        message = 'Data mengalami konflik';
+        message = 'The request conflicts with existing data.';
       }
     }
 

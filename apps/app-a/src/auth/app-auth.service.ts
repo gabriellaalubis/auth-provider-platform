@@ -94,7 +94,7 @@ export class AppAuthService {
     state: string,
   ): Promise<string> {
     const invalid = new UnauthorizedException(
-      'Proses login tidak valid atau sudah kedaluwarsa',
+      'The sign-in request is invalid or expired',
     );
     const now = new Date();
     const attempt = await this.prisma.oAuthLoginAttempt.findUnique({
@@ -262,11 +262,11 @@ export class AppAuthService {
       }),
     });
     if (!response.ok) {
-      throw new UnauthorizedException('Proses login gagal');
+      throw new UnauthorizedException('Sign-in failed');
     }
     const value: unknown = await response.json();
     if (!this.isTokenResponse(value)) {
-      throw new UnauthorizedException('Proses login gagal');
+      throw new UnauthorizedException('Sign-in failed');
     }
     return value;
   }
@@ -280,11 +280,11 @@ export class AppAuthService {
       headers: { authorization: `Bearer ${accessToken}` },
     });
     if (!response.ok) {
-      throw new UnauthorizedException('Proses login gagal');
+      throw new UnauthorizedException('Sign-in failed');
     }
     const value: unknown = await response.json();
     if (!this.isUserInfoResponse(value)) {
-      throw new UnauthorizedException('Proses login gagal');
+      throw new UnauthorizedException('Sign-in failed');
     }
     return value;
   }

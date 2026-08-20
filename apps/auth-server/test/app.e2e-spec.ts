@@ -110,8 +110,14 @@ describe('Auth central session (e2e)', () => {
     const sessionBody = sessionResponse.body as unknown as AuthResponse;
     expect(sessionBody.session.id).toBe(loginBody.session.id);
 
+    const accountPage = await agent.get('/').expect(200);
+    expect(accountPage.text).toContain('Hello, Auth E2E User');
+    expect(accountPage.text).toContain('Sign out everywhere');
+
     await agent.post('/auth/logout').expect(204);
     await agent.get('/auth/session').expect(401);
+    const signedOutPage = await agent.get('/').expect(200);
+    expect(signedOutPage.text).toContain('central session is signed out');
 
     const revoked = await prisma.centralSession.findUniqueOrThrow({
       where: { id: loginBody.session.id },

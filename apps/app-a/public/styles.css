@@ -206,7 +206,7 @@ h2 {
   padding: 19px 24px;
   color: var(--white);
   background: var(--blue);
-  box-shadow: 0 2px 8px rgba(29, 78, 216, 0.2);
+  box-shadow: 0 2px 8px rgba(29, 78, 216, 0.20);
 }
 
 .app-header h1 {

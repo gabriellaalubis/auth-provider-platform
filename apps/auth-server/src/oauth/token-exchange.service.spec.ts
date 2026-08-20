@@ -130,7 +130,7 @@ describe('TokenExchangeService', () => {
     authPrisma.authorizationCode.findUnique.mockResolvedValue(null);
 
     await expect(service.exchange(dto)).rejects.toMatchObject({
-      message: 'Authorization grant tidak valid',
+      message: 'The authorization grant is invalid',
     });
     expect(authPrisma.$transaction).not.toHaveBeenCalled();
   });
@@ -139,7 +139,7 @@ describe('TokenExchangeService', () => {
     tokenService.createPkceChallenge.mockReturnValue('wrong-challenge');
 
     await expect(service.exchange(dto)).rejects.toMatchObject({
-      message: 'Authorization grant tidak valid',
+      message: 'The authorization grant is invalid',
     });
     expect(authPrisma.$transaction).not.toHaveBeenCalled();
   });
@@ -165,7 +165,7 @@ describe('TokenExchangeService', () => {
     });
 
     await expect(service.exchange(dto)).rejects.toMatchObject({
-      message: 'Authorization grant tidak valid',
+      message: 'The authorization grant is invalid',
     });
   });
 });

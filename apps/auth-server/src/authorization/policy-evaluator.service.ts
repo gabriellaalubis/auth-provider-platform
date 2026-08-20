@@ -63,7 +63,7 @@ export class PolicyEvaluatorService {
           metadata: { clientId },
         },
       });
-      throw new ForbiddenException('Akses ke aplikasi ditolak');
+      throw new ForbiddenException('Application access denied');
     }
 
     return {

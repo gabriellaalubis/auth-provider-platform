@@ -3,7 +3,6 @@ import { AuthDatabaseModule } from '@app/auth-database';
 import { PlatformConfigModule } from '@app/config';
 import { RequestIdMiddleware } from '@app/shared';
 import { ControlPanelController } from './control-panel.controller';
-import { ControlPanelService } from './control-panel.service';
 import { SecurityModule } from '@app/security';
 import { UsersModule } from './users/users.module';
 import { GroupsModule } from './groups/groups.module';
@@ -19,7 +18,6 @@ import { ApplicationsModule } from './applications/applications.module';
     ApplicationsModule,
   ],
   controllers: [ControlPanelController],
-  providers: [ControlPanelService],
 })
 export class ControlPanelModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {

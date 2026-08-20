@@ -46,7 +46,7 @@ export class AuthService {
           result: 'failed',
         },
       });
-      throw new UnauthorizedException('Credential tidak valid');
+      throw new UnauthorizedException('Invalid credentials');
     }
 
     const safeUser: UserResponse = {

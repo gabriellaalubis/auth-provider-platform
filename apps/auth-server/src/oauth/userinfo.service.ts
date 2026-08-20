@@ -46,7 +46,7 @@ export class UserInfoService {
       accessToken.centralSession.revokedAt !== null ||
       accessToken.centralSession.expiresAt <= now
     ) {
-      throw new UnauthorizedException('Access token tidak valid');
+      throw new UnauthorizedException('The access token is invalid');
     }
 
     return {
