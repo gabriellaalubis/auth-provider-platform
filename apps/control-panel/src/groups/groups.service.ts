@@ -59,7 +59,7 @@ export class GroupsService {
         _count: { select: { users: true } },
         users: {
           include: { user: { select: SAFE_USER_SELECT } },
-          orderBy: { assignedAt: 'asc' },
+          orderBy: { createdAt: 'asc' },
         },
       },
     });

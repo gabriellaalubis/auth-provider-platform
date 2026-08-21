@@ -19,6 +19,8 @@ export class SyncWorkerService implements OnModuleInit, OnModuleDestroy {
   private consumerTag?: string;
   private shuttingDown = false;
   private readonly inFlight = new Set<Promise<void>>();
+  private connecting?: Promise<void>;
+  private reconnectTimer?: NodeJS.Timeout;
 
   constructor(
     private readonly prisma: AuthPrismaService,
@@ -26,34 +28,56 @@ export class SyncWorkerService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   async onModuleInit(): Promise<void> {
-    this.connection = await connect(
+    await this.connectIfNeeded();
+  }
+
+  private async openConnection(): Promise<void> {
+    const connection = await connect(
       this.config.getOrThrow<string>('RABBITMQ_URL'),
     );
-    this.channel = await this.connection.createChannel();
+    connection.on('error', () => undefined);
+    connection.on('close', () => {
+      if (this.connection === connection) {
+        this.connection = undefined;
+        this.channel = undefined;
+        this.consumerTag = undefined;
+        this.scheduleReconnect();
+      }
+    });
+    const channel = await connection.createChannel();
     const queue = this.config.getOrThrow<string>('EVENT_QUEUE_NAME');
-    await this.channel.assertQueue(queue, { durable: true });
-    await this.channel.assertQueue(
+    await channel.assertQueue(queue, { durable: true });
+    await channel.assertQueue(
       this.config.getOrThrow<string>('EVENT_DLQ_NAME'),
       { durable: true },
     );
-    await this.channel.prefetch(4);
-    const consumer = await this.channel.consume(queue, (message) => {
-      if (!message || !this.channel) return;
+    await channel.prefetch(4);
+    const consumer = await channel.consume(queue, (message) => {
+      if (!message) return;
       if (this.shuttingDown) {
-        this.channel.nack(message, false, true);
+        channel.nack(message, false, true);
         return;
       }
-      const operation = this.process(message);
+      const operation = this.process(message, channel);
       const tracked = operation
-        .catch(() => this.requeue(message))
+        .catch(() => this.requeue(message, channel))
         .finally(() => this.inFlight.delete(tracked));
       this.inFlight.add(tracked);
     });
+    if (this.shuttingDown) {
+      await channel.cancel(consumer.consumerTag);
+      await channel.close();
+      await connection.close();
+      return;
+    }
+    this.connection = connection;
+    this.channel = channel;
     this.consumerTag = consumer.consumerTag;
   }
 
   async onModuleDestroy(): Promise<void> {
     this.shuttingDown = true;
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     if (this.channel && this.consumerTag) {
       await this.channel.cancel(this.consumerTag);
     }
@@ -62,22 +86,45 @@ export class SyncWorkerService implements OnModuleInit, OnModuleDestroy {
     await this.connection?.close();
   }
 
+  private async connectIfNeeded(): Promise<void> {
+    if (this.channel || this.shuttingDown) return;
+    if (this.connecting) return this.connecting;
+    const operation = this.openConnection();
+    this.connecting = operation;
+    try {
+      await operation;
+    } finally {
+      if (this.connecting === operation) this.connecting = undefined;
+    }
+  }
+
+  private scheduleReconnect(): void {
+    if (this.shuttingDown || this.reconnectTimer) return;
+    const delay = this.config.getOrThrow<number>('EVENT_RETRY_BASE_MS');
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = undefined;
+      void this.connectIfNeeded().catch(() => this.scheduleReconnect());
+    }, delay);
+  }
+
   getHello(): string {
     return 'Sync Worker is running';
   }
 
-  private async process(message: ConsumeMessage): Promise<void> {
-    if (!this.channel) return;
+  private async process(
+    message: ConsumeMessage,
+    channel: Channel,
+  ): Promise<void> {
     let payload: PlatformEventPayload;
     try {
       payload = this.parse(message.content);
     } catch {
-      this.channel.sendToQueue(
+      channel.sendToQueue(
         this.config.getOrThrow<string>('EVENT_DLQ_NAME'),
         message.content,
         { persistent: true },
       );
-      this.channel.ack(message);
+      channel.ack(message);
       return;
     }
     const attempt = payload.attempt + 1;
@@ -120,9 +167,9 @@ export class SyncWorkerService implements OnModuleInit, OnModuleDestroy {
           lastError: null,
         },
       });
-      this.channel.ack(message);
+      channel.ack(message);
     } catch (error: unknown) {
-      await this.retry(message, payload, attempt, error);
+      await this.retry(message, payload, attempt, error, channel);
     }
   }
 
@@ -131,8 +178,8 @@ export class SyncWorkerService implements OnModuleInit, OnModuleDestroy {
     payload: PlatformEventPayload,
     attempt: number,
     error: unknown,
+    channel: Channel,
   ): Promise<void> {
-    if (!this.channel) return;
     const errorMessage =
       error instanceof Error ? error.message : 'Unknown error';
     const max = this.config.getOrThrow<number>('EVENT_MAX_RETRIES');
@@ -141,12 +188,12 @@ export class SyncWorkerService implements OnModuleInit, OnModuleDestroy {
         where: { id: payload.deliveryId },
         data: { status: DeliveryStatus.FAILED, lastError: errorMessage },
       });
-      this.channel.sendToQueue(
+      channel.sendToQueue(
         this.config.getOrThrow<string>('EVENT_DLQ_NAME'),
         Buffer.from(JSON.stringify({ ...payload, attempt })),
         { persistent: true, contentType: 'application/json' },
       );
-      this.channel.ack(message);
+      channel.ack(message);
       return;
     }
     const delay =
@@ -154,7 +201,7 @@ export class SyncWorkerService implements OnModuleInit, OnModuleDestroy {
       2 ** (attempt - 1);
     const mainQueue = this.config.getOrThrow<string>('EVENT_QUEUE_NAME');
     const retryQueue = `${mainQueue}.retry.${attempt}`;
-    await this.channel.assertQueue(retryQueue, {
+    await channel.assertQueue(retryQueue, {
       durable: true,
       arguments: {
         'x-message-ttl': delay,
@@ -170,12 +217,12 @@ export class SyncWorkerService implements OnModuleInit, OnModuleDestroy {
         lastError: errorMessage,
       },
     });
-    this.channel.sendToQueue(
+    channel.sendToQueue(
       retryQueue,
       Buffer.from(JSON.stringify({ ...payload, attempt })),
       { persistent: true },
     );
-    this.channel.ack(message);
+    channel.ack(message);
   }
 
   private parse(content: Buffer): PlatformEventPayload {
@@ -213,9 +260,9 @@ export class SyncWorkerService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private requeue(message: ConsumeMessage): void {
+  private requeue(message: ConsumeMessage, channel: Channel): void {
     try {
-      this.channel?.nack(message, false, true);
+      channel.nack(message, false, true);
     } catch (error: unknown) {
       void error;
     }

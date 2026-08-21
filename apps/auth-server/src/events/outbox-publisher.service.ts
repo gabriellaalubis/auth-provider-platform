@@ -12,6 +12,7 @@ export class OutboxPublisherService implements OnModuleInit, OnModuleDestroy {
   private publishing = false;
   private shuttingDown = false;
   private activePublish?: Promise<void>;
+  private connecting?: Promise<void>;
 
   constructor(
     private readonly prisma: AuthPrismaService,
@@ -19,22 +20,14 @@ export class OutboxPublisherService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   async onModuleInit(): Promise<void> {
-    this.connection = await connect(
-      this.config.getOrThrow<string>('RABBITMQ_URL'),
-    );
-    this.channel = await this.connection.createConfirmChannel();
-    await this.channel.assertQueue(
-      this.config.getOrThrow<string>('EVENT_QUEUE_NAME'),
-      { durable: true },
-    );
-    await this.channel.assertQueue(
-      this.config.getOrThrow<string>('EVENT_DLQ_NAME'),
-      { durable: true },
-    );
+    await this.connectIfNeeded();
     const interval = this.config.getOrThrow<number>(
       'EVENT_PUBLISH_INTERVAL_MS',
     );
-    this.timer = setInterval(() => void this.publishBatch(), interval);
+    this.timer = setInterval(
+      () => void this.publishBatch().catch(() => undefined),
+      interval,
+    );
     await this.publishBatch();
   }
 
@@ -42,7 +35,7 @@ export class OutboxPublisherService implements OnModuleInit, OnModuleDestroy {
     this.shuttingDown = true;
     if (this.timer) clearInterval(this.timer);
     if (this.activePublish) {
-      await this.waitUntilSettled(this.activePublish);
+      await this.waitForPublish(this.activePublish);
     }
     try {
       await this.channel?.waitForConfirms();
@@ -54,9 +47,11 @@ export class OutboxPublisherService implements OnModuleInit, OnModuleDestroy {
   }
 
   async publishBatch(): Promise<void> {
-    if (this.publishing || this.shuttingDown || !this.channel) return;
+    if (this.publishing || this.shuttingDown) return;
     this.publishing = true;
-    const operation = this.publishPendingEvents();
+    const operation = this.connectIfNeeded().then(() =>
+      this.publishPendingEvents(),
+    );
     this.activePublish = operation;
     try {
       await operation;
@@ -109,7 +104,49 @@ export class OutboxPublisherService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private async waitUntilSettled(operation: Promise<void>): Promise<void> {
+  private async connectIfNeeded(): Promise<void> {
+    if (this.channel || this.shuttingDown) return;
+    if (this.connecting) return this.connecting;
+
+    const operation = this.openConnection();
+    this.connecting = operation;
+    try {
+      await operation;
+    } finally {
+      if (this.connecting === operation) this.connecting = undefined;
+    }
+  }
+
+  private async openConnection(): Promise<void> {
+    const connection = await connect(
+      this.config.getOrThrow<string>('RABBITMQ_URL'),
+    );
+    connection.on('error', () => undefined);
+    connection.on('close', () => {
+      if (this.connection === connection) {
+        this.connection = undefined;
+        this.channel = undefined;
+      }
+    });
+    const channel = await connection.createConfirmChannel();
+    await channel.assertQueue(
+      this.config.getOrThrow<string>('EVENT_QUEUE_NAME'),
+      { durable: true },
+    );
+    await channel.assertQueue(
+      this.config.getOrThrow<string>('EVENT_DLQ_NAME'),
+      { durable: true },
+    );
+    if (this.shuttingDown) {
+      await channel.close();
+      await connection.close();
+      return;
+    }
+    this.connection = connection;
+    this.channel = channel;
+  }
+
+  private async waitForPublish(operation: Promise<void>): Promise<void> {
     const timeout = this.config.getOrThrow<number>('SHUTDOWN_TIMEOUT_MS');
     let timer: NodeJS.Timeout | undefined;
     const deadline = new Promise<void>((resolve) => {

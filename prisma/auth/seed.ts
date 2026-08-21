@@ -141,6 +141,16 @@ async function seed(): Promise<void> {
   validateClientSecret('SEED_APP_B_CLIENT_SECRET', appBSecret);
 
   const adminId = await seedAdmin();
+  const adminGroup = await prisma.group.upsert({
+    where: { name: 'admin' },
+    create: {
+      name: 'admin',
+      description: 'Administrators allowed to manage the SSO Control Panel',
+    },
+    update: {
+      description: 'Administrators allowed to manage the SSO Control Panel',
+    },
+  });
   const appAGroup = await prisma.group.upsert({
     where: { name: 'app-a-users' },
     create: { name: 'app-a-users' },
@@ -152,6 +162,11 @@ async function seed(): Promise<void> {
     update: {},
   });
 
+  await prisma.userGroup.upsert({
+    where: { userId_groupId: { userId: adminId, groupId: adminGroup.id } },
+    create: { userId: adminId, groupId: adminGroup.id },
+    update: {},
+  });
   await prisma.userGroup.upsert({
     where: { userId_groupId: { userId: adminId, groupId: appAGroup.id } },
     create: { userId: adminId, groupId: appAGroup.id },

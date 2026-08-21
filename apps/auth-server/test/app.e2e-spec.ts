@@ -9,6 +9,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import request from 'supertest';
 import type { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
+import { TotpService } from './../src/auth/totp.service';
 
 describe('Auth central session (e2e)', () => {
   let app: INestApplication<App>;
@@ -17,6 +18,7 @@ describe('Auth central session (e2e)', () => {
   const password = 'e2e-auth-password-yang-aman';
   let userId = '';
   let appAGroupId = '';
+  let totpService: TotpService;
 
   function createPkcePair(): { verifier: string; challenge: string } {
     const verifier = randomBytes(32).toString('base64url');
@@ -42,6 +44,7 @@ describe('Auth central session (e2e)', () => {
     await app.init();
 
     prisma = app.get(AuthPrismaService);
+    totpService = app.get(TotpService);
     const passwordService = app.get(PasswordService);
     const user = await prisma.user.create({
       data: {
@@ -252,5 +255,111 @@ describe('Auth central session (e2e)', () => {
       .post('/oauth/token')
       .send(grant)
       .expect(400);
+  });
+
+  it('menyelesaikan enrollment, TOTP login, dan recovery code sekali pakai', async () => {
+    const enrollmentAgent = request.agent(app.getHttpServer());
+    await enrollmentAgent
+      .post('/auth/login')
+      .send({ email, password })
+      .expect(200);
+    const setupPage = await enrollmentAgent
+      .get('/auth/mfa/setup')
+      .expect('Content-Type', /html/)
+      .expect(200);
+    const secretMatch = setupPage.text.match(
+      /<strong id="setup-key">([^<]+)<\/strong>/,
+    );
+    if (!secretMatch) throw new Error('MFA setup key is missing');
+    const secret = secretMatch[1].replaceAll(' ', '');
+    const enrollmentCode = totpService.generateCode(secret);
+    const enrollment = await enrollmentAgent
+      .post('/auth/mfa/enroll')
+      .send({ code: enrollmentCode })
+      .expect(200);
+    const recoveryCodes = (enrollment.body as { recoveryCodes: string[] })
+      .recoveryCodes;
+    expect(recoveryCodes).toHaveLength(8);
+    expect(new Set(recoveryCodes).size).toBe(8);
+
+    const storedUser = await prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+    });
+    expect(storedUser.mfaEnabledAt).not.toBeNull();
+    expect(storedUser.mfaSecretEncrypted).not.toContain(secret);
+    const storedRecoveryCodes = await prisma.mfaRecoveryCode.findMany({
+      where: { userId },
+    });
+    expect(storedRecoveryCodes).toHaveLength(8);
+    expect(storedRecoveryCodes.map((item) => item.codeHash)).not.toContain(
+      recoveryCodes[0],
+    );
+    await enrollmentAgent.post('/auth/logout').expect(204);
+
+    const passwordOnly = await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ email, password })
+      .expect(200);
+    const pending = passwordOnly.body as {
+      mfaRequired: boolean;
+      mfaToken: string;
+      expiresIn: number;
+    };
+    expect(pending).toMatchObject({ mfaRequired: true, expiresIn: 300 });
+    expect(pending.mfaToken).toHaveLength(43);
+    expect(String(passwordOnly.headers['set-cookie'] ?? '')).not.toContain(
+      'central_session=',
+    );
+
+    const currentCode = totpService.generateCode(secret);
+    const incorrectCode = currentCode === '000000' ? '000001' : '000000';
+    await request(app.getHttpServer())
+      .post('/auth/login/mfa')
+      .send({ mfaToken: pending.mfaToken, code: incorrectCode })
+      .expect(401);
+    const completed = await request(app.getHttpServer())
+      .post('/auth/login/mfa')
+      .send({
+        mfaToken: pending.mfaToken,
+        code: currentCode,
+      })
+      .expect(200);
+    expect(String(completed.headers['set-cookie'])).toContain(
+      'central_session=',
+    );
+
+    const recoveryPassword = await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ email, password })
+      .expect(200);
+    const recoveryChallenge = recoveryPassword.body as { mfaToken: string };
+    await request(app.getHttpServer())
+      .post('/auth/login/mfa')
+      .send({
+        mfaToken: recoveryChallenge.mfaToken,
+        code: recoveryCodes[0],
+      })
+      .expect(200);
+
+    const replayPassword = await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ email, password })
+      .expect(200);
+    const replayChallenge = replayPassword.body as { mfaToken: string };
+    await request(app.getHttpServer())
+      .post('/auth/login/mfa')
+      .send({ mfaToken: replayChallenge.mfaToken, code: recoveryCodes[0] })
+      .expect(401);
+
+    const auditTypes = await prisma.auditLog.findMany({
+      where: {
+        userId,
+        eventType: { in: ['mfa_enrolled', 'mfa_success', 'mfa_failed'] },
+      },
+      select: { eventType: true },
+    });
+    expect(new Set(auditTypes.map((item) => item.eventType))).toEqual(
+      new Set(['mfa_enrolled', 'mfa_success', 'mfa_failed']),
+    );
   });
 });

@@ -79,4 +79,9 @@ export const environmentValidationSchema = Joi.object({
     .min(60)
     .max(600)
     .default(300),
+  MFA_CHALLENGE_TTL_SECONDS: Joi.number()
+    .integer()
+    .min(60)
+    .max(600)
+    .default(300),
 });

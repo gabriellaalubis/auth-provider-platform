@@ -2,6 +2,7 @@ import { UnauthorizedException } from '@nestjs/common';
 import { AuthPrismaService } from '@app/auth-database';
 import { AuthService } from './auth.service';
 import { SessionService } from './session.service';
+import { MfaService } from './mfa.service';
 
 const USER = {
   id: '45bb7591-8bc8-40f5-a658-e1ec34c5bab5',
@@ -12,6 +13,8 @@ const USER = {
   passwordChangedAt: null,
   createdAt: new Date('2026-08-16T00:00:00.000Z'),
   updatedAt: new Date('2026-08-16T00:00:00.000Z'),
+  mfaSecretEncrypted: null,
+  mfaEnabledAt: null,
 };
 
 describe('AuthService', () => {
@@ -24,6 +27,7 @@ describe('AuthService', () => {
     verify: jest.fn(),
   };
   const sessionService = { create: jest.fn() };
+  const mfaService = { beginLogin: jest.fn() };
   let service: AuthService;
 
   beforeEach(() => {
@@ -33,7 +37,27 @@ describe('AuthService', () => {
       authPrisma as unknown as AuthPrismaService,
       passwordService,
       sessionService as unknown as SessionService,
+      mfaService as unknown as MfaService,
     );
+  });
+
+  it('requires MFA without creating a central session', async () => {
+    authPrisma.user.findUnique.mockResolvedValue({
+      ...USER,
+      mfaSecretEncrypted: 'encrypted-secret',
+      mfaEnabledAt: new Date(),
+    });
+    passwordService.verify.mockResolvedValue(true);
+    mfaService.beginLogin.mockResolvedValue({
+      mfaRequired: true,
+      mfaToken: 'mfa-token',
+      expiresIn: 300,
+    });
+
+    await expect(
+      service.login({ email: USER.email, password: 'password-valid' }),
+    ).resolves.toMatchObject({ mfaRequired: true });
+    expect(sessionService.create).not.toHaveBeenCalled();
   });
 
   it('membuat session untuk credential user aktif yang benar', async () => {

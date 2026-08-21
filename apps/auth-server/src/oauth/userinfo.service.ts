@@ -25,7 +25,7 @@ export class UserInfoService {
           include: {
             groups: {
               include: { group: true },
-              orderBy: { assignedAt: 'asc' },
+              orderBy: { createdAt: 'asc' },
             },
           },
         },

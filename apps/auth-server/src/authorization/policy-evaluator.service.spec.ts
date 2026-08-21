@@ -62,7 +62,10 @@ describe('PolicyEvaluatorService', () => {
           select: { id: true },
         },
         groups: {
-          where: { group: { users: { some: { userId } } } },
+          where: {
+            effect: 'ALLOW',
+            group: { users: { some: { userId } } },
+          },
           select: { groupId: true },
         },
       },

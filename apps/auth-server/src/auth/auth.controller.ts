@@ -15,6 +15,10 @@ import type { AuthResponse } from '@app/contracts';
 import type { CookieOptions, Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
+import { MfaCodeDto } from './dto/mfa-code.dto';
+import { MfaLoginDto } from './dto/mfa-login.dto';
+import { MfaService, type MfaRequiredResponse } from './mfa.service';
+import { renderMfaSetup } from './mfa.ui';
 import { SessionService } from './session.service';
 
 @Controller('auth')
@@ -23,6 +27,7 @@ export class AuthController {
     private readonly authService: AuthService,
     private readonly sessionService: SessionService,
     private readonly configService: ConfigService,
+    private readonly mfaService: MfaService,
   ) {}
 
   @Get('login')
@@ -54,10 +59,17 @@ export class AuthController {
     <h1>Welcome back</h1>
     <p>Sign in to continue securely to the application.</p>
     <form id="login-form">
+      <div id="password-step">
       <label for="email">Email</label>
       <input id="email" name="email" type="email" autocomplete="username" required>
       <label for="password">Password</label>
       <input id="password" name="password" type="password" autocomplete="current-password" required>
+      </div>
+      <div id="mfa-step" hidden>
+        <label for="code">Authenticator or recovery code</label>
+        <input id="code" name="code" autocomplete="one-time-code" maxlength="32" placeholder="6-digit code">
+        <p class="help">Enter the current code from your authenticator app, or use one recovery code.</p>
+      </div>
       <button id="submit" type="submit">Sign in</button>
       <div id="error" class="error" role="alert"></div>
     </form>
@@ -67,17 +79,20 @@ export class AuthController {
     const form=document.getElementById('login-form');
     const button=document.getElementById('submit');
     const errorBox=document.getElementById('error');
+    let mfaToken='';
     form.addEventListener('submit',async(event)=>{
       event.preventDefault();
       button.disabled=true;
       errorBox.textContent='';
       try{
-        const response=await fetch('/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:form.email.value,password:form.password.value})});
+        const response=await fetch(mfaToken?'/auth/login/mfa':'/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(mfaToken?{mfaToken,code:form.code.value}:{email:form.email.value,password:form.password.value})});
         if(!response.ok){
-          if(response.status===401)throw new Error('Email or password is incorrect.');
+          if(response.status===401)throw new Error(mfaToken?'The authentication code is incorrect or expired.':'Email or password is incorrect.');
           const body=await response.json();
           throw new Error(body?.error?.message||'Sign-in failed. Please try again.');
         }
+        const body=await response.json();
+        if(body.mfaRequired){mfaToken=body.mfaToken;document.getElementById('password-step').hidden=true;document.getElementById('mfa-step').hidden=false;form.email.required=false;form.password.required=false;form.code.required=true;button.textContent='Verify and sign in';form.code.focus();button.disabled=false;return;}
         window.location.assign(destination);
       }catch(error){errorBox.textContent=error instanceof Error?error.message:'Sign-in failed. Please try again.';button.disabled=false;}
     });
@@ -91,10 +106,61 @@ export class AuthController {
   async login(
     @Body() dto: LoginDto,
     @Res({ passthrough: true }) response: Response,
-  ): Promise<AuthResponse> {
+  ): Promise<AuthResponse | MfaRequiredResponse> {
     const result = await this.authService.login(dto);
+    if ('mfaRequired' in result) return result;
     response.cookie(this.cookieName, result.token, this.cookieOptions(true));
     return result.auth;
+  }
+
+  @Post('login/mfa')
+  @HttpCode(HttpStatus.OK)
+  async loginMfa(
+    @Body() dto: MfaLoginDto,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<AuthResponse> {
+    const result = await this.mfaService.completeLogin(dto.mfaToken, dto.code);
+    response.cookie(this.cookieName, result.token, this.cookieOptions(true));
+    return result.auth;
+  }
+
+  @Get('mfa/setup')
+  async mfaSetupPage(
+    @Req() request: Request,
+    @Res() response: Response,
+  ): Promise<void> {
+    const auth = await this.currentAuth(request);
+    if (!auth) {
+      response.redirect('/auth/login');
+      return;
+    }
+    const status = await this.mfaService.getStatus(auth.user.id);
+    const enrollment = status.enabled
+      ? undefined
+      : await this.mfaService.beginEnrollment(auth.user.id, auth.user.email);
+    response.type('html').send(
+      renderMfaSetup({
+        ...status,
+        secret: enrollment?.secret.match(/.{1,4}/g)?.join(' '),
+        provisioningUri: enrollment?.provisioningUri,
+      }),
+    );
+  }
+
+  @Post('mfa/enroll')
+  @HttpCode(HttpStatus.OK)
+  async enrollMfa(
+    @Req() request: Request,
+    @Body() dto: MfaCodeDto,
+  ): Promise<{ recoveryCodes: string[] }> {
+    const auth = await this.currentAuth(request);
+    if (!auth) throw new UnauthorizedException('A central session is required');
+    return {
+      recoveryCodes: await this.mfaService.confirmEnrollment(
+        auth.user.id,
+        dto.code,
+      ),
+    };
   }
 
   @Get('session')
@@ -155,5 +221,10 @@ export class AuthController {
       this.cookieName
     ];
     return typeof token === 'string' ? token : undefined;
+  }
+
+  private async currentAuth(request: Request): Promise<AuthResponse | null> {
+    const token = this.readToken(request);
+    return token ? this.sessionService.getValidSession(token) : null;
   }
 }

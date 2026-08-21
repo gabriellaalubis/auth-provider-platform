@@ -4,6 +4,7 @@ import type { UserResponse } from '@app/contracts';
 import { PasswordService } from '@app/security';
 import { LoginDto } from './dto/login.dto';
 import { SessionService } from './session.service';
+import { MfaService } from './mfa.service';
 
 const USER_SELECT = {
   id: true,
@@ -14,6 +15,8 @@ const USER_SELECT = {
   passwordChangedAt: true,
   createdAt: true,
   updatedAt: true,
+  mfaSecretEncrypted: true,
+  mfaEnabledAt: true,
 } as const;
 
 @Injectable()
@@ -24,6 +27,7 @@ export class AuthService {
     private readonly authPrisma: AuthPrismaService,
     private readonly passwordService: PasswordService,
     private readonly sessionService: SessionService,
+    private readonly mfaService: MfaService,
   ) {
     this.dummyHash = this.passwordService.hash(
       'dummy-password-that-is-never-a-valid-login',
@@ -58,6 +62,9 @@ export class AuthService {
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };
+    if (user.mfaEnabledAt && user.mfaSecretEncrypted) {
+      return this.mfaService.beginLogin(user.id);
+    }
     return this.sessionService.create(safeUser);
   }
 }

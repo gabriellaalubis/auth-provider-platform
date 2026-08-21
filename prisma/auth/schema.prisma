@@ -50,6 +50,10 @@ enum DeliveryStatus {
   FAILED     @map("failed")
 }
 
+enum PolicyEffect {
+  ALLOW @map("allow")
+}
+
 model User {
   id                 String              @id @default(uuid()) @db.Char(36)
   name               String              @db.VarChar(191)
@@ -57,6 +61,8 @@ model User {
   passwordHash       String              @map("password_hash") @db.VarChar(255)
   status             UserStatus          @default(ACTIVE)
   passwordChangedAt  DateTime?           @map("password_changed_at") @db.DateTime(3)
+  mfaSecretEncrypted String?             @map("mfa_secret_encrypted") @db.Text
+  mfaEnabledAt       DateTime?           @map("mfa_enabled_at") @db.DateTime(3)
   createdAt          DateTime            @default(now()) @map("created_at") @db.DateTime(3)
   updatedAt          DateTime            @updatedAt @map("updated_at") @db.DateTime(3)
   groups             UserGroup[]
@@ -66,13 +72,44 @@ model User {
   actorAuditLogs     AuditLog[]          @relation("AuditActor")
   targetAuditLogs    AuditLog[]          @relation("AuditTarget")
   events             Event[]
+  mfaLoginChallenges MfaLoginChallenge[]
+  mfaRecoveryCodes   MfaRecoveryCode[]
 
   @@map("users")
+}
+
+model MfaLoginChallenge {
+  id           String    @id @default(uuid()) @db.Char(36)
+  tokenHash    String    @unique @map("token_hash") @db.Char(64)
+  userId       String    @map("user_id") @db.Char(36)
+  attemptCount Int       @default(0) @map("attempt_count")
+  expiresAt    DateTime  @map("expires_at") @db.DateTime(3)
+  usedAt       DateTime? @map("used_at") @db.DateTime(3)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt, usedAt])
+  @@map("mfa_login_challenges")
+}
+
+model MfaRecoveryCode {
+  id        String    @id @default(uuid()) @db.Char(36)
+  userId    String    @map("user_id") @db.Char(36)
+  codeHash  String    @map("code_hash") @db.Char(64)
+  usedAt    DateTime? @map("used_at") @db.DateTime(3)
+  createdAt DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, codeHash])
+  @@index([userId, usedAt])
+  @@map("mfa_recovery_codes")
 }
 
 model Group {
   id           String             @id @default(uuid()) @db.Char(36)
   name         String             @unique @db.VarChar(191)
+  description  String?            @db.Text
   createdAt    DateTime           @default(now()) @map("created_at") @db.DateTime(3)
   updatedAt    DateTime           @updatedAt @map("updated_at") @db.DateTime(3)
   users        UserGroup[]
@@ -82,13 +119,14 @@ model Group {
 }
 
 model UserGroup {
-  userId     String   @map("user_id") @db.Char(36)
-  groupId    String   @map("group_id") @db.Char(36)
-  assignedAt DateTime @default(now()) @map("assigned_at") @db.DateTime(3)
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  group      Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  id        String   @id @default(uuid()) @db.Char(36)
+  userId    String   @map("user_id") @db.Char(36)
+  groupId   String   @map("group_id") @db.Char(36)
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
-  @@id([userId, groupId])
+  @@unique([userId, groupId])
   @@index([groupId])
   @@map("user_groups")
 }
@@ -127,13 +165,15 @@ model ApplicationRedirectUri {
 }
 
 model ApplicationGroup {
-  applicationId String      @map("application_id") @db.Char(36)
-  groupId       String      @map("group_id") @db.Char(36)
-  assignedAt    DateTime    @default(now()) @map("assigned_at") @db.DateTime(3)
-  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
-  group         Group       @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  id            String       @id @default(uuid()) @db.Char(36)
+  applicationId String       @map("application_id") @db.Char(36)
+  groupId       String       @map("group_id") @db.Char(36)
+  effect        PolicyEffect @default(ALLOW)
+  createdAt     DateTime     @default(now()) @map("created_at") @db.DateTime(3)
+  application   Application  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  group         Group        @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
-  @@id([applicationId, groupId])
+  @@unique([applicationId, groupId])
   @@index([groupId])
   @@map("application_groups")
 }
@@ -148,6 +188,8 @@ model CentralSession {
   lastActivityAt     DateTime?           @map("last_activity_at") @db.DateTime(3)
   revokedAt          DateTime?           @map("revoked_at") @db.DateTime(3)
   revokeReason       String?             @map("revoke_reason") @db.VarChar(191)
+  ipAddress          String?             @map("ip_address") @db.VarChar(45)
+  userAgent          String?             @map("user_agent") @db.Text
   user               User                @relation(fields: [userId], references: [id], onDelete: Restrict)
   authorizationCodes AuthorizationCode[]
   accessTokens       AccessToken[]
@@ -169,7 +211,7 @@ model AuthorizationCode {
   codeChallenge       String                  @map("code_challenge") @db.VarChar(128)
   codeChallengeMethod String                  @default("S256") @map("code_challenge_method") @db.VarChar(16)
   status              AuthorizationCodeStatus @default(ACTIVE)
-  issuedAt            DateTime                @default(now()) @map("issued_at") @db.DateTime(3)
+  createdAt           DateTime                @default(now()) @map("created_at") @db.DateTime(3)
   expiresAt           DateTime                @map("expires_at") @db.DateTime(3)
   usedAt              DateTime?               @map("used_at") @db.DateTime(3)
   user                User                    @relation(fields: [userId], references: [id], onDelete: Restrict)

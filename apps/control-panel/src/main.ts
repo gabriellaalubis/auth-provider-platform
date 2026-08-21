@@ -3,9 +3,11 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ControlPanelModule } from './control-panel.module';
 import { registerGracefulShutdown, StandardExceptionFilter } from '@app/shared';
+import cookieParser from 'cookie-parser';
 
 async function bootstrap() {
   const app = await NestFactory.create(ControlPanelModule);
+  app.use(cookieParser());
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,

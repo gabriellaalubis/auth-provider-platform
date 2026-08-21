@@ -22,7 +22,7 @@ const APPLICATION_INCLUDE = {
   redirectUris: { orderBy: { createdAt: 'asc' as const } },
   groups: {
     include: { group: true },
-    orderBy: { assignedAt: 'asc' as const },
+    orderBy: { createdAt: 'asc' as const },
   },
 } satisfies Prisma.ApplicationInclude;
 

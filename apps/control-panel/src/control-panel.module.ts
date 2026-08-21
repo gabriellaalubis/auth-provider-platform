@@ -7,6 +7,8 @@ import { SecurityModule } from '@app/security';
 import { UsersModule } from './users/users.module';
 import { GroupsModule } from './groups/groups.module';
 import { ApplicationsModule } from './applications/applications.module';
+import { APP_GUARD } from '@nestjs/core';
+import { AdminAccessGuard } from './auth/admin-access.guard';
 
 @Module({
   imports: [
@@ -18,6 +20,7 @@ import { ApplicationsModule } from './applications/applications.module';
     ApplicationsModule,
   ],
   controllers: [ControlPanelController],
+  providers: [{ provide: APP_GUARD, useClass: AdminAccessGuard }],
 })
 export class ControlPanelModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {

@@ -10,6 +10,7 @@ import {
   type LivenessResponse,
   type ReadinessResponse,
 } from './health/health.service';
+import { MfaService } from './auth/mfa.service';
 
 @Controller()
 export class AppController {
@@ -18,6 +19,7 @@ export class AppController {
     private readonly sessionService: SessionService,
     private readonly configService: ConfigService,
     private readonly healthService: HealthService,
+    private readonly mfaService: MfaService,
   ) {}
 
   @Get()
@@ -35,7 +37,10 @@ export class AppController {
       typeof token === 'string'
         ? await this.sessionService.getValidSession(token)
         : null;
-    return this.appService.renderHome(auth);
+    const mfaStatus = auth
+      ? await this.mfaService.getStatus(auth.user.id)
+      : undefined;
+    return this.appService.renderHome(auth, mfaStatus);
   }
 
   @Get('health')

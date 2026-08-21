@@ -4,13 +4,18 @@ import { AuthPrismaService } from '@app/auth-database';
 import type { ErrorResponse, UserResponse } from '@app/contracts';
 import { StandardExceptionFilter } from '@app/shared';
 import { randomUUID } from 'node:crypto';
+import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import type { App } from 'supertest/types';
 import { ControlPanelModule } from './../src/control-panel.module';
+import { TokenService } from '@app/security';
 
 describe('Control Panel users (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: AuthPrismaService;
+  let adminCookie = '';
+  let adminUserId = '';
+  let tokenService: TokenService;
   const email = `e2e-control-${randomUUID()}@example.com`;
   const password = 'e2e-control-password-aman';
   let userId = '';
@@ -21,6 +26,7 @@ describe('Control Panel users (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
+    app.use(cookieParser());
     app.useGlobalPipes(
       new ValidationPipe({
         transform: true,
@@ -31,6 +37,30 @@ describe('Control Panel users (e2e)', () => {
     app.useGlobalFilters(new StandardExceptionFilter());
     await app.init();
     prisma = app.get(AuthPrismaService);
+    tokenService = app.get(TokenService);
+    const adminGroup = await prisma.group.upsert({
+      where: { name: 'admin' },
+      create: { name: 'admin', description: 'Control Panel administrators' },
+      update: {},
+    });
+    const admin = await prisma.user.create({
+      data: {
+        name: 'E2E Control Administrator',
+        email: `e2e-admin-${randomUUID()}@example.com`,
+        passwordHash: 'not-used-by-this-test',
+        groups: { create: { groupId: adminGroup.id } },
+      },
+    });
+    adminUserId = admin.id;
+    const rawToken = randomUUID();
+    await prisma.centralSession.create({
+      data: {
+        sessionTokenHash: tokenService.hash(rawToken),
+        userId: admin.id,
+        expiresAt: new Date(Date.now() + 60_000),
+      },
+    });
+    adminCookie = `central_session=${rawToken}`;
   });
 
   afterAll(async () => {
@@ -39,12 +69,23 @@ describe('Control Panel users (e2e)', () => {
       await prisma.auditLog.deleteMany({ where: { userId } });
       await prisma.user.deleteMany({ where: { id: userId } });
     }
+    if (adminUserId) {
+      await prisma.centralSession.deleteMany({
+        where: { userId: adminUserId },
+      });
+      await prisma.auditLog.deleteMany({ where: { userId: adminUserId } });
+      await prisma.user.deleteMany({ where: { id: adminUserId } });
+    }
     await app.close();
   });
 
   it('serves the interactive administrative interface', async () => {
+    await request(app.getHttpServer()).get('/').expect(401);
+    await request(app.getHttpServer()).get('/health').expect(200);
+
     const response = await request(app.getHttpServer())
       .get('/')
+      .set('Cookie', adminCookie)
       .expect('Content-Type', /html/)
       .expect(200);
 
@@ -58,6 +99,7 @@ describe('Control Panel users (e2e)', () => {
   it('menyelesaikan alur pengelolaan user tanpa membocorkan credential', async () => {
     const createResponse = await request(app.getHttpServer())
       .post('/users')
+      .set('Cookie', adminCookie)
       .send({ name: '  E2E User  ', email: email.toUpperCase(), password })
       .expect(201);
     const created = createResponse.body as unknown as UserResponse;
@@ -74,8 +116,22 @@ describe('Control Panel users (e2e)', () => {
     expect(stored.passwordHash).not.toBe(password);
     expect(stored.passwordHash).toContain('$argon2id$');
 
+    const nonAdminToken = randomUUID();
+    await prisma.centralSession.create({
+      data: {
+        sessionTokenHash: tokenService.hash(nonAdminToken),
+        userId,
+        expiresAt: new Date(Date.now() + 60_000),
+      },
+    });
+    await request(app.getHttpServer())
+      .get('/users')
+      .set('Cookie', `central_session=${nonAdminToken}`)
+      .expect(403);
+
     const duplicateResponse = await request(app.getHttpServer())
       .post('/users')
+      .set('Cookie', adminCookie)
       .send({ name: 'Duplicate', email, password })
       .expect(409);
     const duplicateBody = duplicateResponse.body as unknown as ErrorResponse;
@@ -83,6 +139,7 @@ describe('Control Panel users (e2e)', () => {
 
     const listResponse = await request(app.getHttpServer())
       .get('/users')
+      .set('Cookie', adminCookie)
       .expect(200);
     const users = listResponse.body as unknown as UserResponse[];
     const listedUser = users.find((user) => user.id === userId);
@@ -91,6 +148,7 @@ describe('Control Panel users (e2e)', () => {
 
     const updatedResponse = await request(app.getHttpServer())
       .patch(`/users/${userId}`)
+      .set('Cookie', adminCookie)
       .send({ name: 'Updated E2E User' })
       .expect(200);
     const updated = updatedResponse.body as unknown as UserResponse;
@@ -98,11 +156,13 @@ describe('Control Panel users (e2e)', () => {
 
     await request(app.getHttpServer())
       .patch(`/users/${userId}/password`)
+      .set('Cookie', adminCookie)
       .send({ password: 'e2e-password-baru-yang-aman' })
       .expect(200);
 
     await request(app.getHttpServer())
       .patch(`/users/${userId}/status`)
+      .set('Cookie', adminCookie)
       .send({ status: 'INACTIVE' })
       .expect(200);
 
