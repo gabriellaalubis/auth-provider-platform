@@ -2,7 +2,7 @@ import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ControlPanelModule } from './control-panel.module';
-import { registerGracefulShutdown, StandardExceptionFilter } from '@app/shared';
+import { registerGracefulShutdown } from '@app/shared';
 import cookieParser from 'cookie-parser';
 
 async function bootstrap() {
@@ -15,7 +15,6 @@ async function bootstrap() {
       forbidNonWhitelisted: true,
     }),
   );
-  app.useGlobalFilters(new StandardExceptionFilter());
   const configService = app.get(ConfigService);
   const port = configService.getOrThrow<number>('CONTROL_PANEL_PORT');
 

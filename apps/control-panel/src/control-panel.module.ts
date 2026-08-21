@@ -7,8 +7,9 @@ import { SecurityModule } from '@app/security';
 import { UsersModule } from './users/users.module';
 import { GroupsModule } from './groups/groups.module';
 import { ApplicationsModule } from './applications/applications.module';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { AdminAccessGuard } from './auth/admin-access.guard';
+import { ControlPanelExceptionFilter } from './auth/control-panel-exception.filter';
 
 @Module({
   imports: [
@@ -20,7 +21,10 @@ import { AdminAccessGuard } from './auth/admin-access.guard';
     ApplicationsModule,
   ],
   controllers: [ControlPanelController],
-  providers: [{ provide: APP_GUARD, useClass: AdminAccessGuard }],
+  providers: [
+    { provide: APP_GUARD, useClass: AdminAccessGuard },
+    { provide: APP_FILTER, useClass: ControlPanelExceptionFilter },
+  ],
 })
 export class ControlPanelModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {

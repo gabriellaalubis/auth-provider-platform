@@ -2,7 +2,6 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthPrismaService } from '@app/auth-database';
 import type { ErrorResponse, UserResponse } from '@app/contracts';
-import { StandardExceptionFilter } from '@app/shared';
 import { randomUUID } from 'node:crypto';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
@@ -34,7 +33,6 @@ describe('Control Panel users (e2e)', () => {
         forbidNonWhitelisted: true,
       }),
     );
-    app.useGlobalFilters(new StandardExceptionFilter());
     await app.init();
     prisma = app.get(AuthPrismaService);
     tokenService = app.get(TokenService);
@@ -80,7 +78,29 @@ describe('Control Panel users (e2e)', () => {
   });
 
   it('serves the interactive administrative interface', async () => {
-    await request(app.getHttpServer()).get('/').expect(401);
+    const signedOut = await request(app.getHttpServer())
+      .get('/')
+      .expect('Content-Type', /html/)
+      .expect(401);
+    expect(signedOut.text).toContain('Administrator sign-in required');
+    expect(signedOut.text).toContain('Sign in');
+
+    const expiredToken = randomUUID();
+    await prisma.centralSession.create({
+      data: {
+        sessionTokenHash: tokenService.hash(expiredToken),
+        userId: adminUserId,
+        expiresAt: new Date(Date.now() - 1_000),
+      },
+    });
+    const expired = await request(app.getHttpServer())
+      .get('/')
+      .set('Cookie', `central_session=${expiredToken}`)
+      .expect('Content-Type', /html/)
+      .expect(401);
+    expect(expired.text).toContain('Administrator sign-in required');
+    expect(expired.text).not.toContain('Session expired');
+
     await request(app.getHttpServer()).get('/health').expect(200);
 
     const response = await request(app.getHttpServer())
@@ -128,6 +148,14 @@ describe('Control Panel users (e2e)', () => {
       .get('/users')
       .set('Cookie', `central_session=${nonAdminToken}`)
       .expect(403);
+
+    const deniedPage = await request(app.getHttpServer())
+      .get('/')
+      .set('Cookie', `central_session=${nonAdminToken}`)
+      .expect('Content-Type', /html/)
+      .expect(403);
+    expect(deniedPage.text).toContain('Access denied');
+    expect(deniedPage.text).toContain('Sign out and use another account');
 
     const duplicateResponse = await request(app.getHttpServer())
       .post('/users')
