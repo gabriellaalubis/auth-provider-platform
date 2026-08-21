@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
   Headers,
   HttpCode,
@@ -13,12 +14,16 @@ import {
 import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
 import { SessionService } from '../auth/session.service';
-import { AuthorizationCodeService } from './authorization-code.service';
+import {
+  AuthorizationCodeService,
+  type IssuedAuthorizationCode,
+} from './authorization-code.service';
 import { extractBearerToken } from './bearer-token';
 import { AuthorizeQueryDto } from './dto/authorize-query.dto';
 import { TokenRequestDto } from './dto/token-request.dto';
 import { TokenExchangeService } from './token-exchange.service';
 import { UserInfoService } from './userinfo.service';
+import { renderOAuthAccessDenied } from './oauth-access.ui';
 
 @Controller('oauth')
 export class OAuthController {
@@ -54,14 +59,26 @@ export class OAuthController {
       return;
     }
 
-    const issued = await this.authorizationCodeService.issue({
-      userId: auth.user.id,
-      centralSessionId: auth.session.id,
-      clientId: query.client_id,
-      redirectUri: query.redirect_uri,
-      state: query.state,
-      codeChallenge: query.code_challenge,
-    });
+    let issued: IssuedAuthorizationCode;
+    try {
+      issued = await this.authorizationCodeService.issue({
+        userId: auth.user.id,
+        centralSessionId: auth.session.id,
+        clientId: query.client_id,
+        redirectUri: query.redirect_uri,
+        state: query.state,
+        codeChallenge: query.code_challenge,
+      });
+    } catch (error: unknown) {
+      if (error instanceof ForbiddenException) {
+        response
+          .status(HttpStatus.FORBIDDEN)
+          .type('html')
+          .send(renderOAuthAccessDenied());
+        return;
+      }
+      throw error;
+    }
 
     const redirectUrl = new URL(issued.redirectUri);
     redirectUrl.searchParams.set('code', issued.code);

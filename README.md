@@ -445,15 +445,15 @@ Hasil verifikasi terakhir:
 
 ![Setup Multi-Factor Authentication](docs/screenshots/mfa-setup.png)
 
-### Control Panel — belum login
+### Control Panel: sebelum login
 
 ![Control Panel belum login](docs/screenshots/control-panel-signed-out.png)
 
-### Control Panel — akses ditolak
+### Control Panel: akses ditolak
 
 ![Control Panel akses ditolak](docs/screenshots/control-panel-access-denied.png)
 
-### Control Panel — admin
+### Control Panel: setelah login sebagai admin
 
 ![Control Panel Admin](docs/screenshots/control-panel.png)
 

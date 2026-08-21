@@ -1,3 +1,4 @@
+import { ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
 import { SessionService } from '../auth/session.service';
@@ -92,5 +93,39 @@ describe('OAuthController', () => {
     expect(url.searchParams.get('state')).toBe(
       'state-yang-panjang-dan-acak-123456',
     );
+  });
+
+  it('menampilkan halaman access denied ketika user tidak memiliki izin aplikasi', async () => {
+    const request = {
+      cookies: { central_session: 'central-token' },
+    } as Request;
+    const send = jest.fn();
+    const type = jest.fn().mockReturnValue({ send });
+    const status = jest.fn().mockReturnValue({ type });
+    const response = { status } as unknown as Response;
+    sessionService.getValidSession.mockResolvedValue({
+      user: { id: '11111111-1111-4111-8111-111111111111' },
+      session: { id: '22222222-2222-4222-8222-222222222222' },
+    });
+    authorizationCodeService.issue.mockRejectedValue(
+      new ForbiddenException('Access denied'),
+    );
+
+    await controller.authorize(
+      {
+        response_type: 'code',
+        client_id: 'app-a',
+        redirect_uri: 'http://localhost:4001/callback',
+        state: 'state-yang-panjang-dan-acak-123456',
+        code_challenge: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+        code_challenge_method: 'S256',
+      },
+      request,
+      response,
+    );
+
+    expect(status).toHaveBeenCalledWith(403);
+    expect(type).toHaveBeenCalledWith('html');
+    expect(send).toHaveBeenCalledWith(expect.stringContaining('Access denied'));
   });
 });

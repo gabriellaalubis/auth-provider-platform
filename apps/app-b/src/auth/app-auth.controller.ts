@@ -45,7 +45,11 @@ export class AppAuthController {
   ): Promise<void> {
     const attemptId = this.readCookie(request, 'app_b_oauth_attempt');
     if (!attemptId || !code || !state) {
-      throw new UnauthorizedException('The sign-in request is invalid');
+      response.clearCookie('app_b_oauth_attempt', { path: '/callback' });
+      response.redirect(
+        `/?error=login_failed&requestId=${encodeURIComponent(randomUUID())}`,
+      );
+      return;
     }
     let token: string;
     try {

@@ -45,9 +45,11 @@ export class AppAuthController {
   ): Promise<void> {
     const attemptId = this.readCookie(request, 'app_a_oauth_attempt');
     if (!attemptId || !code || !state) {
-      throw new UnauthorizedException(
-        'The sign-in request is invalid or expired',
+      response.clearCookie('app_a_oauth_attempt', { path: '/callback' });
+      response.redirect(
+        `/?error=login_failed&requestId=${encodeURIComponent(randomUUID())}`,
       );
+      return;
     }
     let localToken: string;
     try {

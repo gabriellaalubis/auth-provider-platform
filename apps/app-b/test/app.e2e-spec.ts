@@ -32,6 +32,24 @@ describe('AppBController (e2e)', () => {
   it('rejects a missing local session', () =>
     request(app.getHttpServer()).get('/api/session').expect(401));
 
+  it('shows the normal page with an error message for an invalid callback', async () => {
+    const callback = await request(app.getHttpServer())
+      .get('/callback')
+      .expect(302);
+
+    expect(callback.headers.location).toMatch(
+      /^\/?\?error=login_failed&requestId=/,
+    );
+    await request(app.getHttpServer())
+      .get(callback.headers.location)
+      .expect(200)
+      .expect('Content-Type', /html/)
+      .expect((response) => {
+        expect(response.text).toContain('Sign-in failed. Please try again.');
+        expect(response.text).toContain('Sign in with SSO');
+      });
+  });
+
   afterEach(async () => {
     await app.close();
   });
