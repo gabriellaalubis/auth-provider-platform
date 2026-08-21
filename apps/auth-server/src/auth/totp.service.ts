@@ -20,7 +20,7 @@ export class TotpService {
   }
 
   createProvisioningUri(email: string, secret: string): string {
-    const issuer = 'University SSO';
+    const issuer = 'Admin SSO';
     const label = encodeURIComponent(`${issuer}:${email}`);
     return `otpauth://totp/${label}?secret=${secret}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=6&period=30`;
   }

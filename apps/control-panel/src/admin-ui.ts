@@ -15,7 +15,7 @@ export function renderAdminUi(): string {
 </head>
 <body>
 <div class="layout">
-  <aside class="sidebar"><div class="brand">University SSO<span>Control Panel</span></div><nav class="nav"><button class="active" data-section="dashboard">Dashboard</button><button data-section="users">Users</button><button data-section="groups">Groups</button><button data-section="applications">Applications</button></nav></aside>
+  <aside class="sidebar"><div class="brand">Admin SSO<span>Control Panel</span></div><nav class="nav"><button class="active" data-section="dashboard">Dashboard</button><button data-section="users">Users</button><button data-section="groups">Groups</button><button data-section="applications">Applications</button></nav></aside>
   <main class="main">
     <header class="topbar"><h1 id="page-title">Dashboard</h1><span class="muted">Identity and access administration</span></header>
     <div class="content" id="content">

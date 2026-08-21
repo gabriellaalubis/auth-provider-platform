@@ -44,7 +44,7 @@ document.getElementById('switch-account').addEventListener('click', () => {
 </head>
 <body>
   <main class="card">
-    <div class="brand"><div class="logo">SSO</div><div><strong>University SSO</strong><span>Control Panel</span></div></div>
+    <div class="brand"><div class="logo">SSO</div><div><strong>Admin SSO</strong><span>Control Panel</span></div></div>
     <div class="eyebrow">${denied ? 'Authorization required' : 'Protected administration'}</div>
     <h1>${title}</h1>
     <p>${message}</p>
